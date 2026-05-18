@@ -1,0 +1,16 @@
+# Claude Code session data — never commit
+.claude/
+.sixth/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Editor/IDE
+.idea/
+*.suo
+*.user
+*.swp
+*.swo
