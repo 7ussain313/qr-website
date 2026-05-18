@@ -1,0 +1,966 @@
+================================================================================
+  QR TICKET VALIDATION WEB APP — PRODUCTION ROADMAP
+  Senior Full-Stack Architecture · Next.js · Supabase · TypeScript
+================================================================================
+
+LEGEND:
+  [ ] = Not started
+  [~] = In progress
+  [x] = Complete
+  [!] = Blocked / needs decision
+
+================================================================================
+PHASE 1 — PROJECT SETUP
+================================================================================
+Goal: Scaffold a production-grade Next.js 14+ App Router monorepo with strict
+      TypeScript, Tailwind CSS, ESLint, Prettier, and a clean folder structure.
+      Nothing runs client-side that shouldn't. Environment variables are handled
+      safely from day one.
+
+--- 1.1  Prerequisites ---
+[x] Install Node.js 20 LTS  (v22.13.1 installed)
+[x] Install pnpm            (v11.1.3 installed via npm install -g pnpm)
+[x] Install Git             (v2.47.0 installed)
+[x] Install VS Code + extensions: ESLint, Prettier, Tailwind CSS IntelliSense,
+    Prisma (optional), Thunder Client or REST Client
+
+--- 1.2  Bootstrap Project ---
+[x] Run: npx create-next-app@latest qr-ticket-app \
+           --typescript \
+           --tailwind \
+           --eslint \
+           --app \
+           --src-dir \
+           --import-alias "@/*"
+[x] cd qr-ticket-app
+
+--- 1.3  Install Core Dependencies ---
+[x] pnpm add @supabase/supabase-js @supabase/ssr
+[x] pnpm add zod
+
+[x] pnpm add qrcode
+[x] pnpm add @types/qrcode
+[x] pnpm add clsx tailwind-merge
+[x] pnpm add lucide-react
+[x] pnpm add sonner          (toast notifications)
+[x] pnpm add date-fns
+[x] pnpm add -D @typescript-eslint/eslint-plugin prettier eslint-config-prettier
+
+--- 1.4  Configure TypeScript (tsconfig.json) ---
+[x] Set "strict": true
+[x] Set "noUncheckedIndexedAccess": true
+[x] Confirm "@/*" path alias maps to "./src/*"
+[x] WHY: strict mode catches null/undefined bugs before production
+
+--- 1.5  Configure ESLint + Prettier ---
+[x] Create .prettierrc: { "semi": false, "singleQuote": true, "tabWidth": 2 }
+[x] Add "editor.formatOnSave": true in .vscode/settings.json
+[x] Add lint and format scripts to package.json
+
+--- 1.6  Establish Folder Structure ---
+[x] Create the following under src/:
+
+    src/
+    ├── app/                         ← Next.js App Router pages
+    │   ├── (auth)/                  ← Route group: login, register
+    │   │   ├── login/page.tsx
+    │   │   └── register/page.tsx
+    │   ├── (owner)/                 ← Route group: owner-only pages
+    │   │   ├── dashboard/page.tsx
+    │   │   ├── sessions/
+    │   │   │   ├── page.tsx
+    │   │   │   └── [id]/page.tsx
+    │   │   ├── staff/page.tsx
+    │   │   └── analytics/page.tsx
+    │   ├── (scanner)/               ← Route group: scanner staff pages
+    │   │   └── scan/page.tsx
+    │   ├── api/                     ← API Routes (server-side ONLY)
+    │   │   ├── auth/
+    │   │   ├── sessions/
+    │   │   ├── tickets/
+    │   │   └── validate/
+    │   ├── layout.tsx
+    │   └── page.tsx
+    ├── components/
+    │   ├── ui/                      ← Reusable primitives (Button, Input, etc.)
+    │   ├── auth/
+    │   ├── sessions/
+    │   ├── tickets/
+    │   └── scanner/
+    ├── lib/
+    │   ├── supabase/
+    │   │   ├── client.ts            ← Browser client (read-only safe ops)
+    │   │   ├── server.ts            ← Server client (for API routes/RSC)
+    │   │   └── admin.ts             ← Service role client (API routes only)
+    │   ├── auth/
+    │   │   └── getServerSession.ts
+    │   ├── utils.ts
+    │   └── constants.ts
+    ├── hooks/                       ← Custom React hooks (client-side)
+    │   └── useSession.ts
+    ├── types/                       ← Shared TypeScript interfaces
+    │   ├── database.ts              ← Supabase-generated types live here
+    │   └── index.ts
+    └── middleware.ts                ← Next.js middleware (auth guard)
+
+[x] WHY: Route groups let you apply different layouts per role without
+    polluting the URL. API routes enforce server-side validation.
+
+--- 1.7  Environment Variables ---
+[x] Create .env.local (NEVER commit this):
+      NEXT_PUBLIC_SUPABASE_URL=
+      NEXT_PUBLIC_SUPABASE_ANON_KEY=
+      SUPABASE_SERVICE_ROLE_KEY=      ← server-only, NEVER expose to client
+      NEXT_PUBLIC_APP_URL=http://localhost:3000
+[x] Create .env.example with empty values (commit this)
+[x] Add .env.local to .gitignore
+[x] WHY: SUPABASE_SERVICE_ROLE_KEY bypasses RLS — if leaked, attacker owns DB
+
+--- 1.8  Git Setup ---
+[x] git init (already initialised)
+[x] Create .gitignore (includes .env.local, node_modules, .next)
+[x] git add . && git commit -m "chore: phase 1 — project scaffold"
+[x] Create GitHub repo and push  (do this when ready to share/deploy)
+
+--- 1.9  Phase 1 Verification Checklist ---
+[x] pnpm dev starts without errors on localhost:3000
+[x] TypeScript strict mode is on (tsc --noEmit passes — 0 errors)
+[x] ESLint passes (pnpm lint — 0 errors)
+[x] Folder structure matches the spec above
+[x] .env.local is NOT tracked by git
+[x] .env.example IS committed
+
+EXPECTED RESULT: A clean Next.js App Router project with strict TypeScript,
+Tailwind, and the correct folder skeleton ready for Supabase integration.
+
+TROUBLESHOOTING:
+  - "Module not found" on @/* alias → check tsconfig paths and next.config.js
+  - pnpm install fails → delete node_modules and pnpm-lock.yaml, retry
+  - Tailwind not applying → confirm content paths in tailwind.config.ts
+
+================================================================================
+PHASE 2 — SUPABASE SETUP
+================================================================================
+Goal: Create and configure the Supabase project, connect it to the app with
+      both browser and server clients, and confirm connectivity.
+
+--- 2.1  Create Supabase Project ---
+[x] Go to https://supabase.com → New Project
+[x] Name: qr-ticket-app
+[x] Choose region closest to your users
+[x] Save the database password securely (not in code)
+[x] Wait for project to provision
+
+--- 2.2  Collect Keys ---
+[x] Project Settings → API → copy:
+      Project URL       → NEXT_PUBLIC_SUPABASE_URL  (set ✅)
+      anon / public key → NEXT_PUBLIC_SUPABASE_ANON_KEY  (set ✅)
+      service_role key  → SUPABASE_SERVICE_ROLE_KEY  (set ✅)
+[x] Pasted into .env.local  (project ref: zlththzxywgpopmbknkq)
+
+--- 2.3  Create Supabase Browser Client (src/lib/supabase/client.ts) ---
+[x] createBrowserClient from @supabase/ssr — done in Phase 1
+[x] WHY: Browser client uses anon key — safe for unauthenticated read-only ops
+
+--- 2.4  Create Supabase Server Client (src/lib/supabase/server.ts) ---
+[x] createServerClient from @supabase/ssr with cookies() — done in Phase 1
+[x] WHY: Runs in API routes and RSC with session cookie access
+
+--- 2.5  Create Supabase Admin Client (src/lib/supabase/admin.ts) ---
+[x] createClient with SUPABASE_SERVICE_ROLE_KEY — done in Phase 1
+[x] Warning comment: only import in /api/** routes, never in components
+
+--- 2.6  Install Supabase CLI ---
+[x] npm install -g supabase  (v2.100.0)
+[x] supabase init  (supabase/config.toml created)
+[x] project_id = "zlththzxywgpopmbknkq" set in supabase/config.toml
+[!] supabase login + link — needs one-time interactive browser login.
+    Run yourself: supabase login
+    Then: supabase link --project-ref zlththzxywgpopmbknkq
+    Do this before Phase 4 to enable migrations.
+
+--- 2.7  Generate TypeScript Types ---
+[!] Will re-run after Phase 4 schema is applied (no tables exist yet)
+    Command (after login+link): supabase gen types typescript --linked > src/types/database.ts
+[x] Placeholder types in src/types/database.ts (all interfaces in index.ts)
+
+--- 2.8  Configure Next.js Middleware (src/middleware.ts) ---
+[x] createServerClient refreshes auth tokens on every request
+[x] Protects all routes except /login, /auth/*, /accept-invite, /_next
+
+--- 2.9  Phase 2 Verification Checklist ---
+[x] Anon client → auth service reachable (connectivity test passed ✅)
+[x] Admin client → service role key valid, DB reachable (test passed ✅)
+[x] src/types/database.ts exists with placeholder types
+[x] middleware.ts builds with 0 errors
+[x] tsc --noEmit passes (0 TypeScript errors)
+
+EXPECTED RESULT: Full Supabase connectivity from both browser and server,
+with type-safe database queries and auth token refresh in middleware.
+
+TROUBLESHOOTING:
+  - 401 from Supabase → anon key is wrong or missing in .env.local
+  - Types not generating → run supabase link first
+  - Middleware error → ensure @supabase/ssr version matches docs
+
+================================================================================
+PHASE 3 — AUTHENTICATION SYSTEM
+================================================================================
+Goal: Implement email/password auth for Owners and Scanner Staff using Supabase
+      Auth. Staff are invited, not self-registered. Protect all routes by role.
+
+--- 3.1  Supabase Auth Settings ---
+[ ] Supabase Dashboard → Authentication → Settings:
+      Site URL: http://localhost:3000 (update for production)
+      Redirect URLs: http://localhost:3000/auth/callback
+[ ] Disable "Enable email confirmations" for dev (re-enable for production)
+[ ] Enable "Secure email change"
+
+--- 3.2  Auth Pages ---
+[ ] Build src/app/(auth)/login/page.tsx:
+      - Email + password form (client component)
+      - Submit → POST /api/auth/login (server-side, NOT direct Supabase call)
+      - On success → redirect based on role (owner → /dashboard, staff → /scan)
+      - Show error states with sonner toast
+[ ] No public registration page (owners are seeded, staff are invited)
+[ ] WHY: Calling signInWithPassword from the browser is acceptable for auth,
+    but redirect logic must be server-validated to prevent role spoofing
+
+--- 3.3  Auth Callback Route ---
+[ ] Create src/app/auth/callback/route.ts
+[ ] Exchange code for session using exchangeCodeForSession
+[ ] Redirect to correct dashboard based on role from user metadata
+
+--- 3.4  Server-Side Login API Route ---
+[ ] POST /api/auth/login:
+      - Validate input with Zod (email, password)
+      - Call supabase.auth.signInWithPassword server-side
+      - Check user role in profiles table
+      - Set session cookie
+      - Return { role } so client can redirect
+[ ] WHY: Centralising auth logic server-side prevents bypass via DevTools
+
+--- 3.5  Logout ---
+[ ] POST /api/auth/logout:
+      - supabase.auth.signOut()
+      - Clear cookies
+      - Redirect to /login
+
+--- 3.6  Middleware Route Protection ---
+[ ] In src/middleware.ts:
+      - Unauthenticated users → redirect to /login
+      - Scanner staff hitting /owner/** → redirect to /scan
+      - Owners hitting /scan → allowed (owners can scan too)
+[ ] Create a getSession() helper that reads from cookies server-side
+
+--- 3.7  Session Helper Hooks ---
+[ ] Create src/hooks/useSession.ts (client hook)
+[ ] Create src/lib/auth/getServerSession.ts (server helper for RSC and API)
+
+--- 3.8  Phase 3 Verification Checklist ---
+[ ] Owner can log in and is redirected to /dashboard
+[ ] Scanner staff can log in and is redirected to /scan
+[ ] Unauthenticated user hitting /dashboard → redirected to /login
+[ ] Scanner staff cannot access /dashboard (redirected)
+[ ] Logout clears session and redirects to /login
+[ ] Auth tokens are in httpOnly cookies, NOT localStorage
+
+EXPECTED RESULT: Secure role-aware authentication. No client-side role checks
+that can be bypassed. All route guards enforced in middleware.
+
+TROUBLESHOOTING:
+  - Redirect loop → middleware matching too broadly, check matcher config
+  - Session missing in RSC → ensure updateSession in middleware runs first
+  - Role not available → confirm profiles table is populated on sign-up
+
+================================================================================
+PHASE 4 — DATABASE AND ROLE ARCHITECTURE
+================================================================================
+Goal: Design the full PostgreSQL schema in Supabase. Apply Row Level Security.
+      Define all roles and their permissions. Generate migration files.
+
+--- 4.1  Core Tables ---
+
+[ ] profiles
+      id          uuid  PK references auth.users(id)
+      email       text  NOT NULL
+      full_name   text
+      role        text  NOT NULL CHECK (role IN ('owner', 'scanner'))
+      is_active   bool  DEFAULT true
+      created_at  timestamptz DEFAULT now()
+      updated_at  timestamptz DEFAULT now()
+
+[ ] sessions  (events/shows/batches)
+      id          uuid  PK DEFAULT gen_random_uuid()
+      owner_id    uuid  references profiles(id)
+      name        text  NOT NULL
+      description text
+      capacity    int   NOT NULL
+      starts_at   timestamptz
+      ends_at     timestamptz
+      is_active   bool  DEFAULT true
+      created_at  timestamptz DEFAULT now()
+      updated_at  timestamptz DEFAULT now()
+
+[ ] tickets
+      id          uuid  PK DEFAULT gen_random_uuid()
+      session_id  uuid  references sessions(id) ON DELETE CASCADE
+      token       uuid  NOT NULL UNIQUE DEFAULT gen_random_uuid()
+      attendee_name  text
+      attendee_email text
+      is_used     bool  DEFAULT false
+      used_at     timestamptz
+      scanned_by  uuid  references profiles(id)
+      expires_at  timestamptz
+      created_at  timestamptz DEFAULT now()
+
+[ ] scan_logs  (immutable audit trail)
+      id          uuid  PK DEFAULT gen_random_uuid()
+      ticket_id   uuid  references tickets(id)
+      session_id  uuid  references sessions(id)
+      scanned_by  uuid  references profiles(id)
+      scan_result text  CHECK (scan_result IN ('success', 'already_used', 'expired', 'not_found'))
+      scanned_at  timestamptz DEFAULT now()
+      ip_address  text
+      user_agent  text
+
+[ ] staff_invitations
+      id          uuid  PK DEFAULT gen_random_uuid()
+      email       text  NOT NULL
+      invited_by  uuid  references profiles(id)
+      session_id  uuid  references sessions(id)  (optional: session-scoped access)
+      token       uuid  NOT NULL UNIQUE DEFAULT gen_random_uuid()
+      accepted_at timestamptz
+      expires_at  timestamptz NOT NULL
+      created_at  timestamptz DEFAULT now()
+
+--- 4.2  Indexes ---
+[ ] CREATE INDEX idx_tickets_token ON tickets(token)
+[ ] CREATE INDEX idx_tickets_session ON tickets(session_id)
+[ ] CREATE INDEX idx_tickets_is_used ON tickets(is_used)
+[ ] CREATE INDEX idx_scan_logs_ticket ON scan_logs(ticket_id)
+[ ] CREATE INDEX idx_scan_logs_scanned_at ON scan_logs(scanned_at)
+[ ] WHY: token lookup happens on EVERY scan — must be O(log n)
+
+--- 4.3  Row Level Security ---
+[ ] Enable RLS on ALL tables:
+      ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+      (repeat for sessions, tickets, scan_logs, staff_invitations)
+
+[ ] profiles RLS:
+      - Users can read/update their own row
+      - Owners can read all profiles
+      - Only service role can insert (via API)
+
+[ ] sessions RLS:
+      - Owners can CRUD their own sessions
+      - Scanners can SELECT active sessions they are assigned to
+
+[ ] tickets RLS:
+      - Owners can CRUD tickets for their sessions
+      - Scanners can SELECT tickets (to initiate scan)
+      - Scanners CANNOT UPDATE tickets directly (validation is via API only)
+      - WHY: direct UPDATE from client would bypass one-time-use logic
+
+[ ] scan_logs RLS:
+      - Scanners can INSERT (via API with service role)
+      - Owners can SELECT all logs for their sessions
+      - Scanners can SELECT their own logs
+      - NOBODY can UPDATE or DELETE scan_logs (immutable)
+
+--- 4.4  Database Functions ---
+[ ] Create validate_ticket(p_token uuid, p_scanner_id uuid) RETURNS json
+      - SECURITY DEFINER (runs as DB owner, bypasses RLS)
+      - Atomic: check + mark + log in ONE transaction
+      - Returns { success, reason, attendee_name, session_name }
+      - WHY: atomicity prevents race condition double-scans
+
+[ ] Create handle_new_user() trigger function
+      - Fires AFTER INSERT on auth.users
+      - Inserts row into profiles with role from user metadata
+
+--- 4.5  Create Migration Files ---
+[ ] Write all DDL in supabase/migrations/YYYYMMDDHHMMSS_init.sql
+[ ] supabase db push   (applies to remote)
+[ ] supabase gen types typescript --linked > src/types/database.ts
+
+--- 4.6  Phase 4 Verification Checklist ---
+[ ] All tables exist in Supabase Table Editor
+[ ] RLS is ON for all tables (yellow lock icon in Supabase)
+[ ] validate_ticket function exists in Database → Functions
+[ ] Indexes visible in Database → Indexes
+[ ] TypeScript types regenerated and match schema
+[ ] Test: scanner JWT cannot UPDATE tickets table directly (should get 403)
+
+EXPECTED RESULT: A locked-down, indexed, audit-ready schema where no client
+can bypass validation logic. All writes go through controlled server paths.
+
+TROUBLESHOOTING:
+  - RLS blocking legitimate reads → check policy conditions carefully
+  - Function not found → confirm SECURITY DEFINER and correct schema
+  - Type mismatch → regen types after schema change
+
+================================================================================
+PHASE 5 — SESSION MANAGEMENT
+================================================================================
+Goal: Owners can create, edit, activate/deactivate, and view sessions (events).
+      The UI is server-rendered where possible.
+
+--- 5.1  Session List Page (/sessions) ---
+[ ] Server component: fetch sessions from Supabase using server client
+[ ] Display: name, capacity, ticket count, tickets used, status, dates
+[ ] "New Session" button → opens modal or navigates to /sessions/new
+[ ] Role guard: only owners see this page (middleware enforces)
+
+--- 5.2  Create Session API Route ---
+[ ] POST /api/sessions:
+      - Auth check (must be owner)
+      - Zod validation: name, capacity, starts_at, ends_at, description
+      - Insert into sessions table
+      - Return created session
+[ ] WHY: server-side insert ensures owner_id is set from the verified session,
+    not from client-supplied data
+
+--- 5.3  Session Detail Page (/sessions/[id]) ---
+[ ] Show session metadata
+[ ] Show ticket list (paginated, 50 per page)
+[ ] Show: attendee name, status (used/unused), used_at, scanned_by
+[ ] Action buttons: Generate Tickets, Export CSV, Deactivate Session
+
+--- 5.4  Update / Delete Session API Routes ---
+[ ] PATCH /api/sessions/[id]: validate owner owns session before update
+[ ] DELETE /api/sessions/[id]: soft-delete (set is_active = false)
+[ ] WHY: never hard-delete sessions — you need the audit trail
+
+--- 5.5  Session Components ---
+[ ] SessionCard component (reusable)
+[ ] SessionForm component (create/edit, shared)
+[ ] SessionStats component (capacity bar, usage %)
+[ ] Confirm deactivation with a modal (destructive action warning)
+
+--- 5.6  Phase 5 Verification Checklist ---
+[ ] Owner can create a session with all fields
+[ ] Session appears in list immediately
+[ ] Capacity is enforced (cannot generate more tickets than capacity)
+[ ] Deactivated session is not accessible to scanners
+[ ] Scanner staff cannot access /sessions page
+
+EXPECTED RESULT: Full session CRUD with server-side ownership enforcement.
+
+================================================================================
+PHASE 6 — STAFF / SCANNER MANAGEMENT
+================================================================================
+Goal: Owners invite scanner staff via email. Staff accept via a link. Staff
+      accounts are scoped and revocable.
+
+--- 6.1  Invite Staff API Route ---
+[ ] POST /api/staff/invite:
+      - Owner auth check
+      - Zod: email, optional session_id (scoped invite), expires_in hours
+      - Generate secure random token (use crypto.randomUUID())
+      - Insert into staff_invitations
+      - Send email with Supabase Auth inviteUserByEmail() OR custom link
+      - Invitation link: /accept-invite?token=<uuid>
+[ ] WHY: email invitations prevent self-registration by unknown parties
+
+--- 6.2  Accept Invitation Page ---
+[ ] GET /accept-invite?token=... :
+      - Validate token exists and is not expired/used
+      - Show form: full name + password
+[ ] POST /api/staff/accept-invite:
+      - Validate token again (double check, token can be replayed)
+      - supabase.auth.admin.createUser({ email, password, role: 'scanner' })
+      - Insert into profiles
+      - Mark invitation as accepted (accepted_at = now())
+
+--- 6.3  Staff List Page (/staff) ---
+[ ] List all scanner profiles: name, email, is_active, created_at
+[ ] Show last scan timestamp per staff member
+[ ] Actions: Revoke access (set is_active = false)
+
+--- 6.4  Revoke Access API Route ---
+[ ] POST /api/staff/[id]/revoke:
+      - Owner auth check
+      - Set profiles.is_active = false
+      - supabase.auth.admin.signOut(userId) (invalidate sessions)
+[ ] WHY: disabling without sign-out leaves active tokens until expiry
+
+--- 6.5  Middleware Scanner Active Check ---
+[ ] On every scanner request, verify profiles.is_active = true
+[ ] If false → sign out and redirect to /login with "Account suspended" message
+
+--- 6.6  Phase 6 Verification Checklist ---
+[ ] Owner sends invite → email received with valid link
+[ ] Staff accepts invite → account created with role 'scanner'
+[ ] Revoked staff cannot log in or make API calls
+[ ] Staff list shows correct active/inactive state
+[ ] Expired invitations are rejected gracefully
+
+EXPECTED RESULT: Safe, revocable, invitation-only staff onboarding.
+
+================================================================================
+PHASE 7 — QR CODE GENERATION SYSTEM
+================================================================================
+Goal: Generate cryptographically unique QR codes per ticket. Store tokens
+      securely. Never expose the raw token in the QR code plaintext.
+
+--- 7.1  Ticket Generation API Route ---
+[ ] POST /api/sessions/[id]/tickets/generate:
+      - Owner auth check
+      - Check session capacity vs existing ticket count
+      - Accept: count (how many to generate), optional attendee CSV data
+      - Generate `count` rows with:
+          token: crypto.randomUUID()   (stored in DB)
+          qr_payload: base64(sessionId + "." + token) or signed JWT
+      - Bulk insert with supabase from('tickets').insert(rows)
+      - Return list of ticket IDs (NOT raw tokens)
+[ ] WHY: tokens are secret; expose only IDs to client for QR rendering
+
+--- 7.2  Individual Ticket QR Endpoint ---
+[ ] GET /api/tickets/[id]/qr:
+      - Owner auth check
+      - Fetch ticket token from DB (server only)
+      - Generate QR code SVG/PNG using `qrcode` library (server-side)
+      - Return image with Cache-Control: no-store
+[ ] WHY: QR is generated server-side so the raw token is never in client memory
+
+--- 7.3  QR Payload Format ---
+[ ] Payload: JSON stringified { v: 1, t: "<token_uuid>" }
+[ ] Optionally sign with HMAC-SHA256 using a server secret for tamper detection
+[ ] Keep payload short — QR complexity grows with payload size
+[ ] WHY: versioned payload allows format changes without breaking old codes
+
+--- 7.4  Bulk Export ---
+[ ] GET /api/sessions/[id]/tickets/export:
+      - Returns PDF or ZIP of QR code images
+      - Each QR labeled with attendee name if provided
+      - Owner only
+[ ] Use a library like pdfkit or jsPDF on server-side
+
+--- 7.5  Ticket Generation UI ---
+[ ] "Generate Tickets" button on session detail page
+[ ] Input: quantity selector (1–capacity remaining)
+[ ] Optional: CSV upload for attendee names/emails
+[ ] Progress indicator for bulk generation (stream response)
+[ ] After generation: show list with download QR button per ticket
+
+--- 7.6  Phase 7 Verification Checklist ---
+[ ] Can generate 1 ticket → QR code image renders correctly
+[ ] Can generate 100 tickets in bulk (check for DB timeout)
+[ ] QR token is NOT visible in browser DevTools network tab (server renders)
+[ ] Generating beyond session capacity returns 400 error
+[ ] Each ticket has a unique token (check DB constraint)
+
+EXPECTED RESULT: Server-side QR generation with cryptographically unique,
+non-guessable tokens. Client never touches raw token values.
+
+================================================================================
+PHASE 8 — QR SCANNING SYSTEM
+================================================================================
+Goal: Scanner staff use a mobile-friendly camera UI to scan QR codes. Scanning
+      always calls the server — never validates on the frontend.
+
+--- 8.1  Scanner Page UI (/scan) ---
+[ ] Mobile-first, full-screen camera view
+[ ] Use react-qr-reader or @zxing/browser for QR detection
+[ ] Show status overlay (Ready / Scanning / Processing / Result)
+[ ] Result states:
+      ✅ Valid   — green overlay, attendee name, session name
+      ❌ Used    — red overlay, "Already scanned at <time> by <staff>"
+      ⏰ Expired — yellow overlay, "Ticket expired"
+      ❓ Invalid — red overlay, "QR code not recognised"
+[ ] Auto-reset to scan mode after 3 seconds
+[ ] Haptic feedback on mobile (navigator.vibrate)
+[ ] WHY: visual + haptic feedback reduces scanner error under pressure
+
+--- 8.2  Scan API Route ---
+[ ] POST /api/validate:
+      - Scanner auth check (must be authenticated + is_active)
+      - Rate limit: max 30 requests/minute per scanner (use Upstash or DB)
+      - Zod: { payload: string }
+      - Parse payload: extract token
+      - Call validate_ticket(token, scanner_id) Postgres function
+      - Return result to client
+[ ] WHY: validation MUST be server-side — client cannot be trusted to
+    determine if a ticket is valid
+
+--- 8.3  Validation Response Format ---
+[ ] Success:   { valid: true, attendee: string, session: string, scanned_at: string }
+[ ] Used:      { valid: false, reason: "already_used", first_scan: string, first_scanner: string }
+[ ] Expired:   { valid: false, reason: "expired" }
+[ ] Not found: { valid: false, reason: "not_found" }
+
+--- 8.4  Prevent Replay / Race Conditions ---
+[ ] validate_ticket DB function uses:
+      SELECT ... FOR UPDATE   (row-level lock)
+      UPDATE tickets SET is_used = true WHERE id = ... AND is_used = false
+      IF NOT FOUND → RETURN already_used result
+[ ] All within a single transaction
+[ ] WHY: without FOR UPDATE, two concurrent scans could both succeed
+
+--- 8.5  Offline Consideration ---
+[ ] Show "No internet" banner when offline
+[ ] Do NOT implement offline validation (too risky for fraud)
+[ ] Queue rejected scans for retry is acceptable for logging only
+
+--- 8.6  Phase 8 Verification Checklist ---
+[ ] Scanner page loads on mobile without errors
+[ ] Camera permission prompt appears correctly
+[ ] Valid QR scan returns success within 500ms
+[ ] Two simultaneous scans of same QR → only one succeeds
+[ ] Scan without internet → clear error message
+[ ] Rate limit triggers after 30 rapid scans
+
+EXPECTED RESULT: Reliable, fast, mobile-first scanning with server-side
+validation and race-condition-proof one-time-use logic.
+
+================================================================================
+PHASE 9 — ONE-TIME VALIDATION LOGIC (DEEP DIVE)
+================================================================================
+Goal: Make it mathematically impossible to use a ticket twice, even under
+      concurrent load from multiple scanners at the same event.
+
+--- 9.1  Atomic DB Function (final implementation) ---
+[ ] CREATE OR REPLACE FUNCTION validate_ticket(
+      p_token UUID,
+      p_scanner_id UUID
+    ) RETURNS JSONB
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    AS $$
+    DECLARE
+      v_ticket tickets%ROWTYPE;
+      v_session sessions%ROWTYPE;
+    BEGIN
+      -- Lock the row immediately
+      SELECT * INTO v_ticket
+      FROM tickets
+      WHERE token = p_token
+      FOR UPDATE NOWAIT;
+
+      -- Not found
+      IF NOT FOUND THEN
+        RETURN jsonb_build_object('valid', false, 'reason', 'not_found');
+      END IF;
+
+      -- Expired
+      IF v_ticket.expires_at IS NOT NULL AND v_ticket.expires_at < now() THEN
+        INSERT INTO scan_logs(ticket_id, session_id, scanned_by, scan_result)
+        VALUES (v_ticket.id, v_ticket.session_id, p_scanner_id, 'expired');
+        RETURN jsonb_build_object('valid', false, 'reason', 'expired');
+      END IF;
+
+      -- Already used
+      IF v_ticket.is_used THEN
+        INSERT INTO scan_logs(ticket_id, session_id, scanned_by, scan_result)
+        VALUES (v_ticket.id, v_ticket.session_id, p_scanner_id, 'already_used');
+        RETURN jsonb_build_object('valid', false, 'reason', 'already_used',
+          'used_at', v_ticket.used_at);
+      END IF;
+
+      -- Mark as used
+      UPDATE tickets
+      SET is_used = true, used_at = now(), scanned_by = p_scanner_id
+      WHERE id = v_ticket.id;
+
+      -- Log success
+      INSERT INTO scan_logs(ticket_id, session_id, scanned_by, scan_result)
+      VALUES (v_ticket.id, v_ticket.session_id, p_scanner_id, 'success');
+
+      -- Fetch session name
+      SELECT * INTO v_session FROM sessions WHERE id = v_ticket.session_id;
+
+      RETURN jsonb_build_object(
+        'valid', true,
+        'attendee_name', v_ticket.attendee_name,
+        'session_name', v_session.name
+      );
+    END;
+    $$;
+
+[ ] WHY: FOR UPDATE NOWAIT acquires a row lock. If two transactions try to
+    lock the same row simultaneously, the second gets an error immediately
+    instead of waiting — preventing a double-success window.
+
+--- 9.2  API Route Calls the Function ---
+[ ] const { data } = await supabase.rpc('validate_ticket', {
+      p_token: token,
+      p_scanner_id: user.id
+    })
+[ ] Handle NOWAIT lock error (error code 55P03) → return 409 "Scan collision,
+    try again" — the scanner should retry once
+
+--- 9.3  Token Expiry Enforcement ---
+[ ] If session.ends_at is set, set ticket.expires_at = session.ends_at on generation
+[ ] Expiry is checked inside the DB function (source of truth)
+[ ] WHY: client clocks cannot be trusted for expiry checks
+
+--- 9.4  Phase 9 Verification Checklist ---
+[ ] Load test: 10 concurrent POST /api/validate with same token
+    → exactly 1 success, rest return already_used or collision
+[ ] Expired ticket returns expired reason
+[ ] scan_logs has one row per scan attempt (including failed ones)
+[ ] No ticket can have is_used = false after a successful validate
+
+================================================================================
+PHASE 10 — ADMIN DASHBOARD AND ANALYTICS
+================================================================================
+Goal: Owner sees live attendance, scan history, and per-session stats. Uses
+      Supabase Realtime for live updates.
+
+--- 10.1  Dashboard Overview Page (/dashboard) ---
+[ ] Server component: fetch stats on load
+[ ] Stat cards: total sessions, total tickets, tickets scanned today, active scanners
+[ ] Recent scan feed (last 10 scans across all sessions)
+
+--- 10.2  Per-Session Analytics Page ---
+[ ] Attendance rate: (used / total) %
+[ ] Capacity bar chart
+[ ] Scans over time (line chart by hour)
+[ ] Top scanners (who scanned most)
+[ ] First scan time, last scan time
+
+--- 10.3  Realtime Live Count ---
+[ ] Subscribe to scan_logs INSERT events via Supabase Realtime
+[ ] Update attendance counter in real-time without page refresh
+[ ] Show "X people checked in" live counter on scan page for scanner staff
+[ ] WHY: Realtime via Supabase uses Postgres logical replication — no polling
+
+--- 10.4  Scan History / Audit Log ---
+[ ] Paginated table: ticket token (truncated), attendee, result, scanner, time, IP
+[ ] Filter by: session, date range, result type, scanner
+[ ] Export to CSV
+
+--- 10.5  Analytics Components ---
+[ ] StatsCard (reusable)
+[ ] AttendanceChart (use recharts or chart.js)
+[ ] ScanLogTable with pagination
+[ ] RealtimeCounter (client component with Supabase channel)
+
+--- 10.6  Phase 10 Verification Checklist ---
+[ ] Dashboard loads stats correctly
+[ ] Realtime counter increments when a scan happens (test with two browser windows)
+[ ] CSV export downloads and has correct data
+[ ] Charts render on mobile
+
+================================================================================
+PHASE 11 — SECURITY HARDENING
+================================================================================
+Goal: Make the app resistant to common web attacks and fraud vectors.
+
+--- 11.1  API Security Headers ---
+[ ] Add to next.config.js headers():
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      X-XSS-Protection: 1; mode=block
+      Referrer-Policy: strict-origin-when-cross-origin
+      Permissions-Policy: camera=(self), microphone=()
+      Content-Security-Policy: (strict, allow supabase CDN)
+
+--- 11.2  Rate Limiting ---
+[ ] /api/validate: 30 req/min per scanner IP + user ID
+[ ] /api/auth/login: 5 attempts/min per IP
+[ ] Use Upstash Redis (Vercel-compatible) or simple DB counter
+[ ] Return 429 with Retry-After header
+
+--- 11.3  Input Sanitization ---
+[ ] All API inputs validated through Zod schemas
+[ ] Reject unexpected fields (use Zod .strict())
+[ ] Never pass raw user input to SQL (Supabase client uses parameterized queries)
+
+--- 11.4  QR Token Hardening ---
+[ ] Tokens are UUID v4 (122 bits of entropy) — cannot be guessed
+[ ] Optional: add HMAC signature to QR payload so tampered codes fail fast
+    before hitting DB
+[ ] Never log raw tokens in application logs
+
+--- 11.5  Session / Cookie Security ---
+[ ] Supabase SSR uses httpOnly, Secure, SameSite=Lax cookies automatically
+[ ] Set __Host- cookie prefix in production for additional binding
+[ ] Session expiry: 1 hour for scanners, 8 hours for owners
+
+--- 11.6  Dependency Audit ---
+[ ] pnpm audit before deployment
+[ ] Set up Dependabot or Renovate for automated dependency updates
+[ ] Review Supabase RLS policies after any schema change
+
+--- 11.7  Penetration Test Checklist ---
+[ ] Try to access /api/validate without auth → should get 401
+[ ] Try to submit a random token → should get not_found, no info leak
+[ ] Try to scan as owner → should work (owner has scanner rights too)
+[ ] Try to use a revoked scanner account → should get 403
+[ ] Try SQL injection via payload field → Zod + parameterized queries block it
+[ ] Try to enumerate ticket tokens → rate limiting blocks bulk attempts
+
+--- 11.8  Phase 11 Verification Checklist ---
+[ ] Security headers present (check with securityheaders.com in production)
+[ ] Rate limiting tested (curl loop to /api/validate)
+[ ] All Zod schemas have .strict() where appropriate
+[ ] pnpm audit shows 0 high/critical vulnerabilities
+
+================================================================================
+PHASE 12 — DEPLOYMENT
+================================================================================
+Goal: Deploy to production on Vercel with production Supabase, environment
+      variables, and custom domain. Zero-downtime.
+
+--- 12.1  Pre-Deployment Checklist ---
+[ ] pnpm build passes with 0 errors
+[ ] All TypeScript errors resolved (tsc --noEmit)
+[ ] All .env.local variables documented in .env.example
+[ ] pnpm audit clean
+[ ] supabase db push run against production project
+
+--- 12.2  Vercel Deployment ---
+[ ] Push to GitHub main branch
+[ ] Connect GitHub repo to Vercel
+[ ] Add all environment variables in Vercel dashboard:
+      NEXT_PUBLIC_SUPABASE_URL
+      NEXT_PUBLIC_SUPABASE_ANON_KEY
+      SUPABASE_SERVICE_ROLE_KEY
+      NEXT_PUBLIC_APP_URL  (your production domain)
+[ ] Deploy → check build logs
+
+--- 12.3  Supabase Production Settings ---
+[ ] Update Auth → Site URL to production domain
+[ ] Add production domain to Auth → Redirect URLs
+[ ] Enable email confirmations
+[ ] Enable Supabase Vault for secret storage (optional but recommended)
+[ ] Set up Supabase backups (daily, PITR if on Pro plan)
+
+--- 12.4  Custom Domain ---
+[ ] Add domain in Vercel → Domains
+[ ] Update DNS records (CNAME or A record)
+[ ] Verify SSL certificate (auto-provisioned by Vercel)
+
+--- 12.5  Post-Deployment Verification ---
+[ ] Login flow works on production domain
+[ ] QR generation works and QR images load
+[ ] Scan flow works on mobile (test with real phone)
+[ ] Realtime updates work (test with two devices)
+[ ] Check Vercel Functions logs for any runtime errors
+
+--- 12.6  Phase 12 Verification Checklist ---
+[ ] Production URL loads without errors
+[ ] HTTPS enforced (no HTTP fallback)
+[ ] Environment variables are NOT visible in client bundle (check DevTools)
+[ ] Scanner staff can only access /scan on production
+
+================================================================================
+PHASE 13 — SCALING AND OPTIMIZATION
+================================================================================
+Goal: Prepare the app for high-concurrent events (1000+ scans/minute).
+
+--- 13.1  Database Optimization ---
+[ ] Confirm all indexes are in place (Phase 4.2)
+[ ] Run EXPLAIN ANALYZE on validate_ticket function
+[ ] Enable Supabase connection pooling (PgBouncer) in project settings
+[ ] WHY: Next.js serverless functions open many short-lived DB connections;
+    PgBouncer pools them to prevent exhaustion
+
+--- 13.2  Edge Runtime for Validate Route ---
+[ ] Consider moving /api/validate to Edge Runtime:
+      export const runtime = 'edge'
+[ ] Use @supabase/supabase-js with fetch transport (works on Edge)
+[ ] WHY: Edge functions are geographically distributed → lower latency scans
+
+--- 13.3  Caching Strategy ---
+[ ] Session data: cache for 60s in RSC (use next revalidate)
+[ ] Ticket list: cache for 30s (invalidate on generation)
+[ ] QR images: Cache-Control: no-store (security — do not cache)
+[ ] Dashboard stats: revalidate on scan event via Supabase webhook
+
+--- 13.4  Load Testing ---
+[ ] Use k6 or Artillery to simulate 500 concurrent scans
+[ ] Target: < 200ms p99 response time for /api/validate
+[ ] Monitor: Supabase DB CPU, connection count, function invocations
+
+--- 13.5  Monitoring and Alerting ---
+[ ] Set up Vercel Analytics (basic)
+[ ] Set up Sentry for error tracking:
+      pnpm add @sentry/nextjs
+      npx @sentry/wizard@latest -i nextjs
+[ ] Alert on: error rate > 1%, validate latency > 500ms, DB connections > 80%
+
+--- 13.6  Future Improvements (Optional) ---
+[ ] Multi-tenant support (multiple organizations)
+[ ] NFC tag support alongside QR
+[ ] Offline-capable PWA with conflict resolution
+[ ] Ticket transfer / name change flow
+[ ] Webhook notifications on scan events
+[ ] White-label branding per event
+[ ] Ticket PDF generation with QR embedded
+[ ] SMS verification for high-security events
+[ ] Apple Wallet / Google Wallet pass generation
+
+--- 13.7  Phase 13 Verification Checklist ---
+[ ] Load test passes without errors or DB timeouts
+[ ] Sentry captures a test error correctly
+[ ] PgBouncer enabled in Supabase dashboard
+[ ] Edge runtime on validate route (check Vercel dashboard function regions)
+
+================================================================================
+  CROSS-CUTTING CONCERNS (applies to ALL phases)
+================================================================================
+
+CLIENT vs SERVER BOUNDARY:
+  Run on SERVER (API routes, RSC, middleware):
+    - Auth verification
+    - Ticket validation
+    - QR token generation
+    - Role checks
+    - Database writes
+    - Secret key access
+  Run on CLIENT (React components with 'use client'):
+    - Camera/QR scanner UI
+    - Real-time subscription listeners
+    - Form state
+    - Toast notifications
+    - Chart rendering
+
+SECURITY NON-NEGOTIABLES:
+  [ ] Never validate QR codes on the frontend
+  [ ] Never expose SUPABASE_SERVICE_ROLE_KEY to client
+  [ ] Never trust client-supplied role or user ID — always read from server session
+  [ ] Always use parameterized queries (Supabase client handles this)
+  [ ] Always log failed scan attempts (for fraud detection)
+
+ANTI-FRAUD PROTECTIONS SUMMARY:
+  [ ] UUID tokens with 122-bit entropy (unguessable)
+  [ ] Atomic DB transaction (race-condition-proof)
+  [ ] Rate limiting on scan endpoint
+  [ ] Immutable scan_logs (cannot delete evidence)
+  [ ] Revocable scanner accounts
+  [ ] Token expiry tied to session end time
+  [ ] IP + user agent logged on every scan
+  [ ] HMAC signature on QR payload (optional but recommended)
+
+================================================================================
+  MASTER PROGRESS TRACKER
+================================================================================
+
+Phase  1 — Project Setup                [x] COMPLETE
+Phase  2 — Supabase Setup               [x] COMPLETE
+Phase  3 — Authentication System        [ ] NOT STARTED
+Phase  4 — Database and Role Arch       [ ] NOT STARTED
+Phase  5 — Session Management           [ ] NOT STARTED
+Phase  6 — Staff Management             [ ] NOT STARTED
+Phase  7 — QR Generation System         [ ] NOT STARTED
+Phase  8 — QR Scanning System           [ ] NOT STARTED
+Phase  9 — One-Time Validation Logic    [ ] NOT STARTED
+Phase 10 — Admin Dashboard / Analytics  [ ] NOT STARTED
+Phase 11 — Security Hardening           [ ] NOT STARTED
+Phase 12 — Deployment                   [ ] NOT STARTED
+Phase 13 — Scaling and Optimization     [ ] NOT STARTED
+
+================================================================================
+  HOW TO USE THIS FILE
+================================================================================
+
+1. Work one phase at a time. Say "continue" when a phase is done.
+2. Check off items with [x] as you complete them.
+3. Mark blockers with [!] and note the reason inline.
+4. Update the Master Progress Tracker at the bottom after each phase.
+5. Never start Phase N+1 until Phase N checklist is fully verified.
+
+================================================================================
