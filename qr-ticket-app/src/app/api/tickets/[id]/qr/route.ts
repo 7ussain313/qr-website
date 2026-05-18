@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
+import { buildPayload } from '@/lib/qr/hmac'
 import QRCode from 'qrcode'
 import type { NextRequest } from 'next/server'
 
@@ -38,7 +39,7 @@ export async function GET(
     return new Response('Not found', { status: 404 })
   }
 
-  const payload = JSON.stringify({ v: 1, t: ticket.token })
+  const payload = buildPayload(ticket.token)
   const buffer = await QRCode.toBuffer(payload, { type: 'png', width: 300, margin: 2 })
 
   const safeName = ticket.attendee_name

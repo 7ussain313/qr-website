@@ -1,9 +1,27 @@
 import { createClient } from '@/lib/supabase/server'
 import { loginSchema } from '@/lib/validation/auth'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown'
+  )
+}
+
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+
+  if (!checkRateLimit(`login:${ip}`, 5, 60_000)) {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please wait 60 seconds.' },
+      { status: 429, headers: { 'Retry-After': '60' } }
+    )
+  }
+
   let body: unknown
   try {
     body = await request.json()
@@ -29,14 +47,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Fetch role from profiles table (populated in Phase 4)
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, is_active')
     .eq('id', data.user.id)
     .single()
 
-  // If profile doesn't exist yet (pre-Phase 4) default to owner for the seeded account
   const role = (profile as { role?: string; is_active?: boolean } | null)?.role ?? 'owner'
   const isActive = (profile as { role?: string; is_active?: boolean } | null)?.is_active ?? true
 

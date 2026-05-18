@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
+import { buildPayload } from '@/lib/qr/hmac'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
 import type { NextRequest } from 'next/server'
@@ -46,7 +47,7 @@ export async function GET(
 
   await Promise.all(
     tickets.map(async (ticket, i) => {
-      const payload = JSON.stringify({ v: 1, t: ticket.token })
+      const payload = buildPayload(ticket.token)
       const buffer = await QRCode.toBuffer(payload, { type: 'png', width: 300, margin: 2 })
       const index = String(i + 1).padStart(String(tickets.length).length, '0')
       const label = ticket.attendee_name

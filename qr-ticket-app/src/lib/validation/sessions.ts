@@ -6,7 +6,7 @@ export const createSessionSchema = z.object({
   capacity: z.number().int().min(1, 'Capacity must be at least 1'),
   starts_at: z.string().datetime({ offset: true }).optional().nullable(),
   ends_at: z.string().datetime({ offset: true }).optional().nullable(),
-})
+}).strict()
 
 export const updateSessionSchema = createSessionSchema.partial()
 

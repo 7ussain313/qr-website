@@ -7,9 +7,9 @@ export const generateTicketsSchema = z.object({
       z.object({
         name: z.string().min(1).max(200),
         email: z.string().email().or(z.literal('')).optional(),
-      })
+      }).strict()
     )
     .optional(),
-})
+}).strict()
 
 export type GenerateTicketsInput = z.infer<typeof generateTicketsSchema>

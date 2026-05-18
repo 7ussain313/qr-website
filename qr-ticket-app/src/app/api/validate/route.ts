@@ -1,24 +1,17 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
-import { scanRequestSchema, qrPayloadSchema } from '@/lib/validation/scan'
+import { scanRequestSchema } from '@/lib/validation/scan'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { verifyPayload } from '@/lib/qr/hmac'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Simple in-memory rate limiter — replaced with Redis in Phase 11
-const rateLimitStore = new Map<string, { count: number; resetsAt: number }>()
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now()
-  const entry = rateLimitStore.get(userId)
-
-  if (!entry || entry.resetsAt <= now) {
-    rateLimitStore.set(userId, { count: 1, resetsAt: now + 60_000 })
-    return true
-  }
-
-  if (entry.count >= 30) return false
-  entry.count++
-  return true
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    request.headers.get('x-real-ip') ??
+    'unknown'
+  )
 }
 
 export async function POST(request: NextRequest) {
@@ -28,9 +21,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
-  if (!checkRateLimit(user.id)) {
+  // Per-user rate limit: 30 scans/min
+  if (!checkRateLimit(`validate:user:${user.id}`, 30, 60_000)) {
     return NextResponse.json(
       { error: 'Rate limit exceeded. Max 30 scans per minute.' },
+      { status: 429, headers: { 'Retry-After': '60' } }
+    )
+  }
+
+  // Per-IP rate limit: 60 scans/min (secondary layer)
+  const ip = getClientIp(request)
+  if (!checkRateLimit(`validate:ip:${ip}`, 60, 60_000)) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded.' },
       { status: 429, headers: { 'Retry-After': '60' } }
     )
   }
@@ -50,15 +53,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Parse QR payload: { v: 1, t: "<uuid>" }
-  let token: string
-  try {
-    const qrData = qrPayloadSchema.parse(JSON.parse(parsed.data.payload))
-    token = qrData.t
-  } catch {
-    // Payload doesn't match expected format — treat as not_found
+  // Verify HMAC signature and extract token
+  const verified = verifyPayload(parsed.data.payload)
+  if (!verified) {
     return NextResponse.json({ valid: false, reason: 'not_found' })
   }
+
+  const token = verified.t
 
   const admin = createAdminClient()
 
