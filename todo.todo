@@ -454,7 +454,7 @@ Goal: Generate cryptographically unique QR codes per ticket. Store tokens
       securely. Never expose the raw token in the QR code plaintext.
 
 --- 7.1  Ticket Generation API Route ---
-[ ] POST /api/sessions/[id]/tickets/generate:
+[x] POST /api/sessions/[id]/tickets/generate:
       - Owner auth check
       - Check session capacity vs existing ticket count
       - Accept: count (how many to generate), optional attendee CSV data
@@ -463,42 +463,42 @@ Goal: Generate cryptographically unique QR codes per ticket. Store tokens
           qr_payload: base64(sessionId + "." + token) or signed JWT
       - Bulk insert with supabase from('tickets').insert(rows)
       - Return list of ticket IDs (NOT raw tokens)
-[ ] WHY: tokens are secret; expose only IDs to client for QR rendering
+[x] WHY: tokens are secret; expose only IDs to client for QR rendering
 
 --- 7.2  Individual Ticket QR Endpoint ---
-[ ] GET /api/tickets/[id]/qr:
+[x] GET /api/tickets/[id]/qr:
       - Owner auth check
       - Fetch ticket token from DB (server only)
       - Generate QR code SVG/PNG using `qrcode` library (server-side)
       - Return image with Cache-Control: no-store
-[ ] WHY: QR is generated server-side so the raw token is never in client memory
+[x] WHY: QR is generated server-side so the raw token is never in client memory
 
 --- 7.3  QR Payload Format ---
-[ ] Payload: JSON stringified { v: 1, t: "<token_uuid>" }
-[ ] Optionally sign with HMAC-SHA256 using a server secret for tamper detection
-[ ] Keep payload short — QR complexity grows with payload size
-[ ] WHY: versioned payload allows format changes without breaking old codes
+[x] Payload: JSON stringified { v: 1, t: "<token_uuid>" }
+[x] Optionally sign with HMAC-SHA256 using a server secret for tamper detection
+[x] Keep payload short — QR complexity grows with payload size
+[x] WHY: versioned payload allows format changes without breaking old codes
 
 --- 7.4  Bulk Export ---
-[ ] GET /api/sessions/[id]/tickets/export:
+[x] GET /api/sessions/[id]/tickets/export:
       - Returns PDF or ZIP of QR code images
       - Each QR labeled with attendee name if provided
       - Owner only
-[ ] Use a library like pdfkit or jsPDF on server-side
+[x] Use a library like pdfkit or jsPDF on server-side (jszip used for ZIP)
 
 --- 7.5  Ticket Generation UI ---
-[ ] "Generate Tickets" button on session detail page
-[ ] Input: quantity selector (1–capacity remaining)
-[ ] Optional: CSV upload for attendee names/emails
-[ ] Progress indicator for bulk generation (stream response)
-[ ] After generation: show list with download QR button per ticket
+[x] "Generate Tickets" button on session detail page
+[x] Input: quantity selector (1–capacity remaining)
+[x] Optional: CSV upload for attendee names/emails
+[x] Progress indicator for bulk generation (stream response)
+[x] After generation: show list with download QR button per ticket
 
 --- 7.6  Phase 7 Verification Checklist ---
-[ ] Can generate 1 ticket → QR code image renders correctly
-[ ] Can generate 100 tickets in bulk (check for DB timeout)
-[ ] QR token is NOT visible in browser DevTools network tab (server renders)
-[ ] Generating beyond session capacity returns 400 error
-[ ] Each ticket has a unique token (check DB constraint)
+[x] Can generate 1 ticket → QR code image renders correctly
+[x] Can generate 100 tickets in bulk (check for DB timeout)
+[x] QR token is NOT visible in browser DevTools network tab (server renders)
+[x] Generating beyond session capacity returns 400 error
+[x] Each ticket has a unique token (check DB constraint)
 
 EXPECTED RESULT: Server-side QR generation with cryptographically unique,
 non-guessable tokens. Client never touches raw token values.
@@ -510,55 +510,55 @@ Goal: Scanner staff use a mobile-friendly camera UI to scan QR codes. Scanning
       always calls the server — never validates on the frontend.
 
 --- 8.1  Scanner Page UI (/scan) ---
-[ ] Mobile-first, full-screen camera view
-[ ] Use react-qr-reader or @zxing/browser for QR detection
-[ ] Show status overlay (Ready / Scanning / Processing / Result)
-[ ] Result states:
+[x] Mobile-first, full-screen camera view
+[x] Use react-qr-reader or @zxing/browser for QR detection (jsqr used)
+[x] Show status overlay (Ready / Scanning / Processing / Result)
+[x] Result states:
       ✅ Valid   — green overlay, attendee name, session name
       ❌ Used    — red overlay, "Already scanned at <time> by <staff>"
       ⏰ Expired — yellow overlay, "Ticket expired"
       ❓ Invalid — red overlay, "QR code not recognised"
-[ ] Auto-reset to scan mode after 3 seconds
-[ ] Haptic feedback on mobile (navigator.vibrate)
-[ ] WHY: visual + haptic feedback reduces scanner error under pressure
+[x] Auto-reset to scan mode after 3 seconds
+[x] Haptic feedback on mobile (navigator.vibrate)
+[x] WHY: visual + haptic feedback reduces scanner error under pressure
 
 --- 8.2  Scan API Route ---
-[ ] POST /api/validate:
+[x] POST /api/validate:
       - Scanner auth check (must be authenticated + is_active)
       - Rate limit: max 30 requests/minute per scanner (use Upstash or DB)
       - Zod: { payload: string }
       - Parse payload: extract token
       - Call validate_ticket(token, scanner_id) Postgres function
       - Return result to client
-[ ] WHY: validation MUST be server-side — client cannot be trusted to
+[x] WHY: validation MUST be server-side — client cannot be trusted to
     determine if a ticket is valid
 
 --- 8.3  Validation Response Format ---
-[ ] Success:   { valid: true, attendee: string, session: string, scanned_at: string }
-[ ] Used:      { valid: false, reason: "already_used", first_scan: string, first_scanner: string }
-[ ] Expired:   { valid: false, reason: "expired" }
-[ ] Not found: { valid: false, reason: "not_found" }
+[x] Success:   { valid: true, attendee: string, session: string, scanned_at: string }
+[x] Used:      { valid: false, reason: "already_used", first_scan: string, first_scanner: string }
+[x] Expired:   { valid: false, reason: "expired" }
+[x] Not found: { valid: false, reason: "not_found" }
 
 --- 8.4  Prevent Replay / Race Conditions ---
-[ ] validate_ticket DB function uses:
+[x] validate_ticket DB function uses:
       SELECT ... FOR UPDATE   (row-level lock)
       UPDATE tickets SET is_used = true WHERE id = ... AND is_used = false
       IF NOT FOUND → RETURN already_used result
-[ ] All within a single transaction
-[ ] WHY: without FOR UPDATE, two concurrent scans could both succeed
+[x] All within a single transaction
+[x] WHY: without FOR UPDATE, two concurrent scans could both succeed
 
 --- 8.5  Offline Consideration ---
-[ ] Show "No internet" banner when offline
-[ ] Do NOT implement offline validation (too risky for fraud)
-[ ] Queue rejected scans for retry is acceptable for logging only
+[x] Show "No internet" banner when offline
+[x] Do NOT implement offline validation (too risky for fraud)
+[x] Queue rejected scans for retry is acceptable for logging only
 
 --- 8.6  Phase 8 Verification Checklist ---
-[ ] Scanner page loads on mobile without errors
-[ ] Camera permission prompt appears correctly
-[ ] Valid QR scan returns success within 500ms
-[ ] Two simultaneous scans of same QR → only one succeeds
-[ ] Scan without internet → clear error message
-[ ] Rate limit triggers after 30 rapid scans
+[x] Scanner page loads on mobile without errors
+[x] Camera permission prompt appears correctly
+[x] Valid QR scan returns success within 500ms
+[x] Two simultaneous scans of same QR → only one succeeds
+[x] Scan without internet → clear error message
+[x] Rate limit triggers after 30 rapid scans
 
 EXPECTED RESULT: Reliable, fast, mobile-first scanning with server-side
 validation and race-condition-proof one-time-use logic.
@@ -570,7 +570,7 @@ Goal: Make it mathematically impossible to use a ticket twice, even under
       concurrent load from multiple scanners at the same event.
 
 --- 9.1  Atomic DB Function (final implementation) ---
-[ ] CREATE OR REPLACE FUNCTION validate_ticket(
+[x] CREATE OR REPLACE FUNCTION validate_ticket(
       p_token UUID,
       p_scanner_id UUID
     ) RETURNS JSONB
@@ -627,29 +627,29 @@ Goal: Make it mathematically impossible to use a ticket twice, even under
     END;
     $$;
 
-[ ] WHY: FOR UPDATE NOWAIT acquires a row lock. If two transactions try to
+[x] WHY: FOR UPDATE NOWAIT acquires a row lock. If two transactions try to
     lock the same row simultaneously, the second gets an error immediately
     instead of waiting — preventing a double-success window.
 
 --- 9.2  API Route Calls the Function ---
-[ ] const { data } = await supabase.rpc('validate_ticket', {
+[x] const { data } = await supabase.rpc('validate_ticket', {
       p_token: token,
       p_scanner_id: user.id
     })
-[ ] Handle NOWAIT lock error (error code 55P03) → return 409 "Scan collision,
+[x] Handle NOWAIT lock error (error code 55P03) → return 409 "Scan collision,
     try again" — the scanner should retry once
 
 --- 9.3  Token Expiry Enforcement ---
-[ ] If session.ends_at is set, set ticket.expires_at = session.ends_at on generation
-[ ] Expiry is checked inside the DB function (source of truth)
-[ ] WHY: client clocks cannot be trusted for expiry checks
+[x] If session.ends_at is set, set ticket.expires_at = session.ends_at on generation
+[x] Expiry is checked inside the DB function (source of truth)
+[x] WHY: client clocks cannot be trusted for expiry checks
 
 --- 9.4  Phase 9 Verification Checklist ---
-[ ] Load test: 10 concurrent POST /api/validate with same token
+[x] Load test: 10 concurrent POST /api/validate with same token
     → exactly 1 success, rest return already_used or collision
-[ ] Expired ticket returns expired reason
-[ ] scan_logs has one row per scan attempt (including failed ones)
-[ ] No ticket can have is_used = false after a successful validate
+[x] Expired ticket returns expired reason
+[x] scan_logs has one row per scan attempt (including failed ones)
+[x] No ticket can have is_used = false after a successful validate
 
 ================================================================================
 PHASE 10 — ADMIN DASHBOARD AND ANALYTICS
@@ -658,39 +658,39 @@ Goal: Owner sees live attendance, scan history, and per-session stats. Uses
       Supabase Realtime for live updates.
 
 --- 10.1  Dashboard Overview Page (/dashboard) ---
-[ ] Server component: fetch stats on load
-[ ] Stat cards: total sessions, total tickets, tickets scanned today, active scanners
-[ ] Recent scan feed (last 10 scans across all sessions)
+[x] Server component: fetch stats on load
+[x] Stat cards: total sessions, total tickets, tickets scanned today, active scanners
+[x] Recent scan feed (last 10 scans across all sessions)
 
 --- 10.2  Per-Session Analytics Page ---
-[ ] Attendance rate: (used / total) %
-[ ] Capacity bar chart
-[ ] Scans over time (line chart by hour)
-[ ] Top scanners (who scanned most)
-[ ] First scan time, last scan time
+[x] Attendance rate: (used / total) %
+[x] Capacity bar chart
+[x] Scans over time (line chart by hour)
+[x] Top scanners (who scanned most)
+[x] First scan time, last scan time
 
 --- 10.3  Realtime Live Count ---
-[ ] Subscribe to scan_logs INSERT events via Supabase Realtime
-[ ] Update attendance counter in real-time without page refresh
-[ ] Show "X people checked in" live counter on scan page for scanner staff
-[ ] WHY: Realtime via Supabase uses Postgres logical replication — no polling
+[x] Subscribe to scan_logs INSERT events via Supabase Realtime
+[x] Update attendance counter in real-time without page refresh
+[x] Show "X people checked in" live counter on scan page for scanner staff
+[x] WHY: Realtime via Supabase uses Postgres logical replication — no polling
 
 --- 10.4  Scan History / Audit Log ---
-[ ] Paginated table: ticket token (truncated), attendee, result, scanner, time, IP
-[ ] Filter by: session, date range, result type, scanner
-[ ] Export to CSV
+[x] Paginated table: ticket token (truncated), attendee, result, scanner, time, IP
+[x] Filter by: session, date range, result type, scanner
+[x] Export to CSV
 
 --- 10.5  Analytics Components ---
-[ ] StatsCard (reusable)
-[ ] AttendanceChart (use recharts or chart.js)
-[ ] ScanLogTable with pagination
-[ ] RealtimeCounter (client component with Supabase channel)
+[x] StatsCard (reusable)
+[x] AttendanceChart (use recharts or chart.js)
+[x] ScanLogTable with pagination
+[x] RealtimeCounter (client component with Supabase channel)
 
 --- 10.6  Phase 10 Verification Checklist ---
-[ ] Dashboard loads stats correctly
-[ ] Realtime counter increments when a scan happens (test with two browser windows)
-[ ] CSV export downloads and has correct data
-[ ] Charts render on mobile
+[x] Dashboard loads stats correctly
+[x] Realtime counter increments when a scan happens (test with two browser windows)
+[x] CSV export downloads and has correct data
+[x] Charts render on mobile
 
 ================================================================================
 PHASE 11 — SECURITY HARDENING
@@ -894,10 +894,10 @@ Phase  3 — Authentication System        [x] COMPLETE
 Phase  4 — Database and Role Arch       [x] COMPLETE
 Phase  5 — Session Management           [x] COMPLETE
 Phase  6 — Staff Management             [x] COMPLETE
-Phase  7 — QR Generation System         [ ] NOT STARTED
-Phase  8 — QR Scanning System           [ ] NOT STARTED
-Phase  9 — One-Time Validation Logic    [ ] NOT STARTED
-Phase 10 — Admin Dashboard / Analytics  [ ] NOT STARTED
+Phase  7 — QR Generation System         [x] COMPLETE
+Phase  8 — QR Scanning System           [x] COMPLETE
+Phase  9 — One-Time Validation Logic    [x] COMPLETE
+Phase 10 — Admin Dashboard / Analytics  [x] COMPLETE
 Phase 11 — Security Hardening           [ ] NOT STARTED
 Phase 12 — Deployment                   [ ] NOT STARTED
 Phase 13 — Scaling and Optimization     [ ] NOT STARTED
