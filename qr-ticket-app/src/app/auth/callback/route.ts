@@ -3,15 +3,24 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
-  const origin = requestUrl.origin
+  const { searchParams, origin } = new URL(request.url)
+  const code = searchParams.get('code')
 
   if (code) {
     const supabase = await createClient()
-    await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (!error && data.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
+
+      const role = (profile as { role?: string } | null)?.role ?? 'owner'
+      return NextResponse.redirect(`${origin}${role === 'owner' ? '/dashboard' : '/scan'}`)
+    }
   }
 
-  // Phase 3: will redirect based on role after profiles table exists
-  return NextResponse.redirect(`${origin}/dashboard`)
+  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
 }
