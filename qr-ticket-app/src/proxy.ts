@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 // Routes only owners can access
 const OWNER_ROUTES = ['/dashboard', '/sessions', '/staff', '/analytics']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -39,6 +39,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/register') ||
     pathname.startsWith('/auth') ||
     pathname.startsWith('/accept-invite') ||
+    pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/public')
 
   // Unauthenticated → login

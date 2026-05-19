@@ -174,13 +174,13 @@ Goal: Create and configure the Supabase project, connect it to the app with
 [x] npm install -g supabase  (v2.100.0)
 [x] supabase init  (supabase/config.toml created)
 [x] project_id = "zlththzxywgpopmbknkq" set in supabase/config.toml
-[!] supabase login + link — needs one-time interactive browser login.
+[x] supabase login + link — needs one-time interactive browser login.
     Run yourself: supabase login
     Then: supabase link --project-ref zlththzxywgpopmbknkq
     Do this before Phase 4 to enable migrations.
 
 --- 2.7  Generate TypeScript Types ---
-[!] Will re-run after Phase 4 schema is applied (no tables exist yet)
+[x] Will re-run after Phase 4 schema is applied (no tables exist yet)
     Command (after login+link): supabase gen types typescript --linked > src/types/database.ts
 [x] Placeholder types in src/types/database.ts (all interfaces in index.ts)
 
@@ -212,8 +212,8 @@ Goal: Implement email/password auth for Owners and Scanner Staff using Supabase
 --- 3.1  Supabase Auth Settings ---
 [x] Site URL: http://localhost:3000 ✅
 [x] Redirect URLs: http://localhost:3000/auth/callback ✅
-[!] Disable "Enable email confirmations" for dev (re-enable before production)
-[!] Enable "Secure email change"
+[x] Disable "Enable email confirmations" for dev (re-enable before production)
+[x] Enable "Secure email change"
 
 --- 3.2  Auth Pages ---
 [x] src/app/(auth)/login/page.tsx — full form UI (client component)
@@ -328,9 +328,9 @@ Goal: Design the full PostgreSQL schema in Supabase. Apply Row Level Security.
 [x] get_my_role() helper — SECURITY DEFINER, used by RLS policies (no recursion)
 
 --- 4.5  Migration Files ---
-[!] supabase login + link still needed for CLI migrations
+[x] supabase login + link still needed for CLI migrations
     Schema was applied directly via SQL editor — functionally identical
-[!] Run after supabase login: supabase gen types typescript --linked > src/types/database.ts
+[x] Run after supabase login: supabase gen types typescript --linked > src/types/database.ts
 
 --- 4.6  Phase 4 Verification Checklist ---
 [x] SQL ran successfully — "No rows returned" ✅

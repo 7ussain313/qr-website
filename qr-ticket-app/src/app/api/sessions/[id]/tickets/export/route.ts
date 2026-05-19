@@ -6,11 +6,11 @@ import JSZip from 'jszip'
 import type { NextRequest } from 'next/server'
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return new Response('Unauthorized', { status: 403 })

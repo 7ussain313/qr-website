@@ -5,8 +5,8 @@ import { createSessionSchema } from '@/lib/validation/sessions'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export async function GET() {
-  const { user, profile } = await getServerSession()
+export async function GET(request: NextRequest) {
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -28,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

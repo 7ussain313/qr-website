@@ -17,11 +17,11 @@ async function assertOwnsSession(userId: string, sessionId: string) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -46,7 +46,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -86,11 +86,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

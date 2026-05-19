@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { getServerSession } from '@/lib/auth/getServerSession'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-export async function GET() {
-  const { user, profile } = await getServerSession()
+export async function GET(request: NextRequest) {
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

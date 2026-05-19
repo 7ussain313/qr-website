@@ -14,10 +14,10 @@ type RawScanLog = {
 }
 
 export async function GET(
-  _req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || !profile || profile.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

@@ -17,7 +17,7 @@ function getClientIp(request: NextRequest): string {
 }
 
 export async function POST(request: NextRequest) {
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || !profile || !profile.is_active) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { user, profile } = await getServerSession()
+  const { user, profile } = await getServerSession(request)
 
   if (!user || profile?.role !== 'owner') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })

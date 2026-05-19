@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { loginSchema } from '@/lib/validation/auth'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { NextResponse } from 'next/server'
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { data: profile } = await supabase
+  // Force session flush to cookies before any response is sent
+  await supabase.auth.getUser()
+
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('profiles')
     .select('role, is_active')
     .eq('id', data.user.id)

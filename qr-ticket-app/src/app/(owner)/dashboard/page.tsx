@@ -102,10 +102,10 @@ export default function DashboardPage() {
             {loading && (
               <div className="px-5 py-10 text-center text-sm text-gray-400">Loading…</div>
             )}
-            {!loading && (data?.recent_scans.length ?? 0) === 0 && (
+            {!loading && (data?.recent_scans?.length ?? 0) === 0 && (
               <div className="px-5 py-10 text-center text-sm text-gray-400">No scans yet</div>
             )}
-            {data?.recent_scans.map((scan) => (
+            {data?.recent_scans?.map((scan) => (
               <div key={scan.id} className="flex items-center gap-3 px-5 py-3">
                 {resultIcon[scan.scan_result] ?? null}
                 <div className="flex-1 min-w-0">
