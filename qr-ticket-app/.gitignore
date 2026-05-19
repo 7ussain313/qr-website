@@ -61,3 +61,5 @@ desktop.ini
 # Supabase local dev (Docker volumes — not needed in repo)
 /supabase/.branches
 /supabase/.temp
+
+.vercel

@@ -14,3 +14,5 @@ $RECYCLE.BIN/
 *.user
 *.swp
 *.swo
+
+.vercel

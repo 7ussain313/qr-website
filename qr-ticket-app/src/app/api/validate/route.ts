@@ -1,5 +1,3 @@
-export const runtime = 'edge'
-
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
 import { scanRequestSchema } from '@/lib/validation/scan'

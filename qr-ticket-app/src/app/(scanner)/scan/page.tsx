@@ -154,7 +154,11 @@ export default function ScanPage() {
         body: JSON.stringify({ payload: rawData }),
       })
 
-      if (res.status === 409) {
+      if (res.status === 403) {
+        setStatus('invalid')
+        setResult({ message: 'Session expired — please sign in again' })
+        vibrate(300)
+      } else if (res.status === 409) {
         setStatus('invalid')
         setResult({ message: 'Scan collision — try again' })
         vibrate(300)
