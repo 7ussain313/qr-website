@@ -39,7 +39,7 @@ export async function GET(
     return new Response('Not found', { status: 404 })
   }
 
-  const payload = buildPayload(ticket.token)
+  const payload = await buildPayload(ticket.token)
   const buffer = await QRCode.toBuffer(payload, { type: 'png', width: 300, margin: 2 })
 
   const safeName = ticket.attendee_name

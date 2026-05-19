@@ -1,6 +1,7 @@
 onlyBuiltDependencies:
   - sharp
   - unrs-resolver
+  - '@sentry/cli'
 
 overrides:
   postcss: ">=8.5.10"

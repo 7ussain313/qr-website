@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withSentryConfig } from '@sentry/nextjs'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 // Extract host for CSP connect-src (e.g. https://xyz.supabase.co)
@@ -37,4 +38,9 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+export default withSentryConfig(nextConfig, {
+  // Suppress Sentry CLI output during builds
+  silent: !process.env.CI,
+  // Disable source map upload until SENTRY_AUTH_TOKEN is configured in CI
+  sourcemaps: { disable: true },
+})

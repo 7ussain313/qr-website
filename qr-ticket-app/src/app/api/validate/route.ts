@@ -1,3 +1,5 @@
+export const runtime = 'edge'
+
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
 import { scanRequestSchema } from '@/lib/validation/scan'
@@ -21,6 +23,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
+  const ip = getClientIp(request)
+  const userAgent = request.headers.get('user-agent') ?? null
+
   // Per-user rate limit: 30 scans/min
   if (!checkRateLimit(`validate:user:${user.id}`, 30, 60_000)) {
     return NextResponse.json(
@@ -30,7 +35,6 @@ export async function POST(request: NextRequest) {
   }
 
   // Per-IP rate limit: 60 scans/min (secondary layer)
-  const ip = getClientIp(request)
   if (!checkRateLimit(`validate:ip:${ip}`, 60, 60_000)) {
     return NextResponse.json(
       { error: 'Rate limit exceeded.' },
@@ -54,18 +58,18 @@ export async function POST(request: NextRequest) {
   }
 
   // Verify HMAC signature and extract token
-  const verified = verifyPayload(parsed.data.payload)
+  const verified = await verifyPayload(parsed.data.payload)
   if (!verified) {
     return NextResponse.json({ valid: false, reason: 'not_found' })
   }
 
-  const token = verified.t
-
   const admin = createAdminClient()
 
   const { data, error } = await admin.rpc('validate_ticket', {
-    p_token: token,
+    p_token: verified.t,
     p_scanner_id: user.id,
+    p_ip_address: ip,
+    p_user_agent: userAgent,
   })
 
   // PostgreSQL FOR UPDATE NOWAIT lock collision (error code 55P03)

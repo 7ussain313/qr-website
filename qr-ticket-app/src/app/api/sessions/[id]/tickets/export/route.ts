@@ -47,7 +47,7 @@ export async function GET(
 
   await Promise.all(
     tickets.map(async (ticket, i) => {
-      const payload = buildPayload(ticket.token)
+      const payload = await buildPayload(ticket.token)
       const buffer = await QRCode.toBuffer(payload, { type: 'png', width: 300, margin: 2 })
       const index = String(i + 1).padStart(String(tickets.length).length, '0')
       const label = ticket.attendee_name
