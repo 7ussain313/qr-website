@@ -15,6 +15,14 @@ export async function GET(
   const { id } = await params
   const admin = createAdminClient()
 
+  // Scanners may only access their assigned session
+  if (profile.role === 'scanner') {
+    const assigned = profile.assigned_session_id
+    if (assigned !== id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    }
+  }
+
   const { data, error } = await admin
     .from('tickets')
     .select('id, attendee_name, attendee_email, is_used, used_at')

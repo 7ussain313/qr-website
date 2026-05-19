@@ -8,6 +8,7 @@ export interface Profile {
   full_name: string | null
   role: UserRole
   is_active: boolean
+  assigned_session_id: string | null
   created_at: string
   updated_at: string
 }

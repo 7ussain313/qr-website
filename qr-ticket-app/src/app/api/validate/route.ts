@@ -65,6 +65,21 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient()
 
+  // Scanners may only scan tickets in their assigned session
+  if (profile.role === 'scanner') {
+    const assigned = profile.assigned_session_id
+    if (assigned) {
+      const { data: ticket } = await admin
+        .from('tickets')
+        .select('session_id')
+        .eq('token', verified.t)
+        .single()
+      if (ticket && (ticket as { session_id: string }).session_id !== assigned) {
+        return NextResponse.json({ valid: false, reason: 'wrong_session' })
+      }
+    }
+  }
+
   const { data, error } = await admin.rpc('validate_ticket', {
     p_token: verified.t,
     p_scanner_id: user.id,

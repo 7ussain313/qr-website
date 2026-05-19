@@ -58,13 +58,20 @@ export async function POST(request: NextRequest) {
     .eq('id', data.user.id)
     .single()
 
-  const role = (profile as { role?: string; is_active?: boolean } | null)?.role ?? 'owner'
-  const isActive = (profile as { role?: string; is_active?: boolean } | null)?.is_active ?? true
+  const p = profile as { role?: string; is_active?: boolean } | null
 
-  if (!isActive) {
+  if (!p || (p.role !== 'owner' && p.role !== 'scanner')) {
+    await supabase.auth.signOut()
+    return NextResponse.json(
+      { error: 'Account not provisioned — contact your administrator.' },
+      { status: 403 }
+    )
+  }
+
+  if (p.is_active === false) {
     await supabase.auth.signOut()
     return NextResponse.json({ error: 'Account suspended. Contact your administrator.' }, { status: 403 })
   }
 
-  return NextResponse.json({ role })
+  return NextResponse.json({ role: p.role })
 }

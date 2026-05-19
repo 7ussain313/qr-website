@@ -122,7 +122,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-400">
-          Staff accounts are created by invitation only.
+          Contact your administrator to get access.
         </p>
       </div>
     </main>

@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { RealtimeCounter } from '@/components/analytics/RealtimeCounter'
 
-type ScanStatus = 'idle' | 'processing' | 'success' | 'used' | 'expired' | 'invalid'
+type ScanStatus = 'idle' | 'processing' | 'success' | 'used' | 'expired' | 'invalid' | 'wrong_session'
 
 interface ScanResult {
   attendeeName?: string | null
@@ -53,10 +53,9 @@ interface TicketData {
   remaining: number
 }
 
-interface SessionOption {
+interface AssignedSession {
   id: string
   name: string
-  capacity: number
 }
 
 function vibrate(pattern: number | number[]) {
@@ -75,20 +74,27 @@ export default function ScanPage() {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [scannedToday, setScannedToday] = useState<number | null>(null)
+  const [assignedSession, setAssignedSession] = useState<AssignedSession | null>(null)
 
   // Attendee panel state
   const [showPanel, setShowPanel] = useState(false)
-  const [sessions, setSessions] = useState<SessionOption[]>([])
-  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
   const [ticketData, setTicketData] = useState<TicketData | null>(null)
   const [loadingTickets, setLoadingTickets] = useState(false)
   const [search, setSearch] = useState('')
 
+  // Load assigned session + today's scan count on mount
   useEffect(() => {
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((d: { assigned_session?: AssignedSession; scanned_today?: number }) => {
+        if (d.assigned_session) setAssignedSession(d.assigned_session)
+      })
+      .catch(() => {})
+
     fetch('/api/analytics')
       .then((r) => r.json())
       .then((d: { scanned_today: number }) => setScannedToday(d.scanned_today))
-      .catch(() => { /* non-critical */ })
+      .catch(() => {})
   }, [])
 
   // Online / offline detection
@@ -103,22 +109,9 @@ export default function ScanPage() {
     }
   }, [])
 
-  // Load active sessions when panel opens
+  // Poll tickets when panel is open
   useEffect(() => {
-    if (!showPanel) return
-    fetch('/api/sessions/active')
-      .then((r) => r.json())
-      .then((d: { sessions: SessionOption[] }) => {
-        const list = d.sessions ?? []
-        setSessions(list)
-        if (list.length === 1 && list[0]) setSelectedSessionId(list[0].id)
-      })
-      .catch(() => {})
-  }, [showPanel])
-
-  // Poll tickets when session selected + panel open
-  useEffect(() => {
-    if (!showPanel || !selectedSessionId) {
+    if (!showPanel || !assignedSession) {
       setTicketData(null)
       return
     }
@@ -126,10 +119,10 @@ export default function ScanPage() {
     let cancelled = false
 
     async function fetchTickets() {
-      if (!selectedSessionId) return
+      if (!assignedSession) return
       setLoadingTickets(true)
       try {
-        const r = await fetch(`/api/sessions/${selectedSessionId}/tickets`)
+        const r = await fetch(`/api/sessions/${assignedSession.id}/tickets`)
         const d = (await r.json()) as TicketData
         if (!cancelled) setTicketData(d)
       } catch {
@@ -145,12 +138,14 @@ export default function ScanPage() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [showPanel, selectedSessionId])
+  }, [showPanel, assignedSession])
 
   const handleScan = useCallback(async (rawData: string) => {
     scanningRef.current = false
     setStatus('processing')
     vibrate(50)
+
+    let cooldown = 3000
 
     try {
       const res = await fetch('/api/validate', {
@@ -177,6 +172,7 @@ export default function ScanPage() {
             sessionName: data.session_name,
           })
           vibrate([100, 50, 100])
+          cooldown = 2000
         } else {
           const reason = data.reason ?? 'not_found'
           if (reason === 'already_used') {
@@ -184,6 +180,9 @@ export default function ScanPage() {
             setResult({ usedAt: data.used_at })
           } else if (reason === 'expired') {
             setStatus('expired')
+          } else if (reason === 'wrong_session') {
+            setStatus('wrong_session')
+            cooldown = 4000
           } else {
             setStatus('invalid')
           }
@@ -196,12 +195,11 @@ export default function ScanPage() {
       vibrate(500)
     }
 
-    // Auto-reset after 3 seconds
     setTimeout(() => {
       setStatus('idle')
       setResult(null)
       scanningRef.current = true
-    }, 3000)
+    }, cooldown)
   }, [])
 
   // Camera initialisation + scan loop
@@ -300,34 +298,44 @@ export default function ScanPage() {
       )}
 
       {/* Header */}
-      <div className="absolute top-0 inset-x-0 flex items-center justify-between px-4 py-3 z-10">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
-            <QrCode className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-sm font-semibold text-white drop-shadow">QR Ticket Scanner</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {scannedToday !== null && (
-            <div className="[&>div]:bg-white/10 [&>div]:text-white [&_svg]:text-white/70">
-              <RealtimeCounter initialCount={scannedToday} />
+      <div className="absolute top-0 inset-x-0 z-10">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
+              <QrCode className="h-4 w-4 text-white" />
             </div>
-          )}
-          <button
-            onClick={() => setShowPanel(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
-          >
-            <Users className="h-4 w-4" />
-            List
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
+            <span className="text-sm font-semibold text-white drop-shadow">Scanner</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {scannedToday !== null && (
+              <div className="[&>div]:bg-white/10 [&>div]:text-white [&_svg]:text-white/70">
+                <RealtimeCounter initialCount={scannedToday} />
+              </div>
+            )}
+            <button
+              onClick={() => setShowPanel(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
+            >
+              <Users className="h-4 w-4" />
+              List
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Session name bar */}
+        {assignedSession && (
+          <div className="mx-4 mb-1 rounded-lg bg-white/10 backdrop-blur-sm px-3 py-1.5">
+            <p className="truncate text-xs font-medium text-white/80">
+              📍 {assignedSession.name}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Camera error state */}
@@ -385,7 +393,12 @@ export default function ScanPage() {
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-gray-700" />
-                <h2 className="font-semibold text-gray-900">Attendee List</h2>
+                <div>
+                  <h2 className="font-semibold text-gray-900">Attendee List</h2>
+                  {assignedSession && (
+                    <p className="text-xs text-gray-400">{assignedSession.name}</p>
+                  )}
+                </div>
                 {loadingTickets && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
               </div>
               <button
@@ -396,28 +409,11 @@ export default function ScanPage() {
               </button>
             </div>
 
-            {/* Session selector */}
-            <div className="px-5 py-3 border-b border-gray-100 shrink-0">
-              {sessions.length === 0 ? (
-                <p className="text-sm text-gray-400">No active sessions found</p>
-              ) : (
-                <select
-                  value={selectedSessionId}
-                  onChange={(e) => {
-                    setSelectedSessionId(e.target.value)
-                    setSearch('')
-                  }}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-800 focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10"
-                >
-                  <option value="">Select a session…</option>
-                  {sessions.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            {selectedSessionId && ticketData && (
+            {!assignedSession ? (
+              <div className="flex flex-1 items-center justify-center py-10 text-sm text-gray-400">
+                No session assigned
+              </div>
+            ) : ticketData ? (
               <>
                 {/* Stats bar */}
                 <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 shrink-0">
@@ -508,9 +504,7 @@ export default function ScanPage() {
                   )}
                 </div>
               </>
-            )}
-
-            {selectedSessionId && !ticketData && loadingTickets && (
+            ) : (
               <div className="flex flex-1 items-center justify-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
               </div>
@@ -589,6 +583,20 @@ function StatusCard({ status, result }: { status: ScanStatus; result: ScanResult
           <div>
             <p className="font-bold text-white text-lg leading-tight">TICKET EXPIRED</p>
             <p className="text-sm text-yellow-100">This ticket is no longer valid</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'wrong_session') {
+    return (
+      <div className="rounded-2xl bg-orange-500 px-5 py-4 shadow-lg">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-white" />
+          <div>
+            <p className="font-bold text-white text-lg leading-tight">WRONG EVENT</p>
+            <p className="text-sm text-orange-100">This ticket belongs to a different session</p>
           </div>
         </div>
       </div>

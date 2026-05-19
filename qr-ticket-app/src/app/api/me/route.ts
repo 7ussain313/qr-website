@@ -11,22 +11,24 @@ export async function GET(request: NextRequest) {
 
   const admin = createAdminClient()
 
-  if (profile.role === 'scanner') {
-    const sessionId = profile.assigned_session_id
-    if (!sessionId) return NextResponse.json({ sessions: [] })
+  // If scanner, fetch the assigned session name too
+  let assignedSession: { id: string; name: string } | null = null
+  const sessionId = profile.assigned_session_id
+  if (sessionId) {
     const { data } = await admin
       .from('sessions')
-      .select('id, name, capacity')
+      .select('id, name')
       .eq('id', sessionId)
-      .eq('is_active', true)
-    return NextResponse.json({ sessions: data ?? [] })
+      .single()
+    if (data) assignedSession = data as { id: string; name: string }
   }
 
-  const { data } = await admin
-    .from('sessions')
-    .select('id, name, capacity')
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-
-  return NextResponse.json({ sessions: data ?? [] })
+  return NextResponse.json({
+    id: user.id,
+    email: user.email,
+    full_name: profile.full_name,
+    role: profile.role,
+    assigned_session_id: sessionId,
+    assigned_session: assignedSession,
+  })
 }

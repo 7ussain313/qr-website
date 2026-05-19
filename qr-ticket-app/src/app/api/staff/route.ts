@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   // Fetch all scanner profiles with their last scan timestamp
   const { data: staff, error } = await supabase
     .from('profiles')
-    .select('id, email, full_name, is_active, created_at')
+    .select('id, email, full_name, is_active, created_at, assigned_session_id, sessions:assigned_session_id ( id, name )')
     .eq('role', 'scanner')
     .order('created_at', { ascending: false })
 

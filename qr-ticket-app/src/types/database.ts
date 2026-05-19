@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       profiles: {
         Row: {
+          assigned_session_id: string | null
           created_at: string
           email: string
           full_name: string | null
@@ -25,6 +26,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_session_id?: string | null
           created_at?: string
           email: string
           full_name?: string | null
@@ -34,6 +36,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_session_id?: string | null
           created_at?: string
           email?: string
           full_name?: string | null

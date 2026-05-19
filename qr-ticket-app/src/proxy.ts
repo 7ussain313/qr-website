@@ -19,7 +19,10 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              secure: process.env.NODE_ENV === 'production',
+            })
           )
         },
       },
@@ -38,7 +41,6 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/auth') ||
-    pathname.startsWith('/accept-invite') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/public')
 
@@ -49,34 +51,31 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Authenticated — enforce role on owner-only routes
-  if (user) {
+  // Authenticated — fetch profile for every non-public request
+  if (user && !isPublicRoute) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_active')
+      .eq('id', user.id)
+      .single()
+
+    const p = profile as { role?: string; is_active?: boolean } | null
+
+    // Revoked account — sign out and redirect
+    if (p && p.is_active === false) {
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'account_suspended')
+      return NextResponse.redirect(url)
+    }
+
+    // Scanner trying to access owner-only page route → send to scan
     const isOwnerRoute = OWNER_ROUTES.some((r) => pathname.startsWith(r))
-
-    if (isOwnerRoute) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, is_active')
-        .eq('id', user.id)
-        .single()
-
-      const p = profile as { role?: string; is_active?: boolean } | null
-
-      // Revoked account — sign out and redirect
-      if (p && p.is_active === false) {
-        await supabase.auth.signOut()
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        url.searchParams.set('error', 'account_suspended')
-        return NextResponse.redirect(url)
-      }
-
-      // Scanner staff trying to access owner route → send to scan page
-      if (p && p.role !== 'owner') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/scan'
-        return NextResponse.redirect(url)
-      }
+    if (isOwnerRoute && p && p.role !== 'owner') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/scan'
+      return NextResponse.redirect(url)
     }
   }
 
