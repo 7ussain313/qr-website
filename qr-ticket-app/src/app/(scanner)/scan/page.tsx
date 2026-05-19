@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import jsQR from 'jsqr'
 import {
   CheckCircle2,
@@ -10,15 +11,9 @@ import {
   WifiOff,
   Camera,
   QrCode,
-  LogOut,
-  Users,
-  X,
-  Search,
-  Clock,
+  ArrowLeft,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
-import { RealtimeCounter } from '@/components/analytics/RealtimeCounter'
 
 type ScanStatus = 'idle' | 'processing' | 'success' | 'used' | 'expired' | 'invalid' | 'wrong_session'
 
@@ -38,21 +33,6 @@ type ValidateResponse = {
   error?: string
 }
 
-interface Ticket {
-  id: string
-  attendee_name: string | null
-  attendee_email: string | null
-  is_used: boolean
-  used_at: string | null
-}
-
-interface TicketData {
-  tickets: Ticket[]
-  total: number
-  checked_in: number
-  remaining: number
-}
-
 interface AssignedSession {
   id: string
   name: string
@@ -65,39 +45,27 @@ function vibrate(pattern: number | number[]) {
 }
 
 export default function ScanPage() {
+  const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scanningRef = useRef(true)
+  const lastScannedRef = useRef<string | null>(null)
 
   const [status, setStatus] = useState<ScanStatus>('idle')
   const [result, setResult] = useState<ScanResult | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
-  const [scannedToday, setScannedToday] = useState<number | null>(null)
   const [assignedSession, setAssignedSession] = useState<AssignedSession | null>(null)
 
-  // Attendee panel state
-  const [showPanel, setShowPanel] = useState(false)
-  const [ticketData, setTicketData] = useState<TicketData | null>(null)
-  const [loadingTickets, setLoadingTickets] = useState(false)
-  const [search, setSearch] = useState('')
-
-  // Load assigned session + today's scan count on mount
   useEffect(() => {
     fetch('/api/me')
       .then((r) => r.json())
-      .then((d: { assigned_session?: AssignedSession; scanned_today?: number }) => {
+      .then((d: { assigned_session?: AssignedSession }) => {
         if (d.assigned_session) setAssignedSession(d.assigned_session)
       })
       .catch(() => {})
-
-    fetch('/api/analytics')
-      .then((r) => r.json())
-      .then((d: { scanned_today: number }) => setScannedToday(d.scanned_today))
-      .catch(() => {})
   }, [])
 
-  // Online / offline detection
   useEffect(() => {
     const onOnline = () => setIsOnline(true)
     const onOffline = () => setIsOnline(false)
@@ -109,39 +77,13 @@ export default function ScanPage() {
     }
   }, [])
 
-  // Poll tickets when panel is open
-  useEffect(() => {
-    if (!showPanel || !assignedSession) {
-      setTicketData(null)
-      return
-    }
-
-    let cancelled = false
-
-    async function fetchTickets() {
-      if (!assignedSession) return
-      setLoadingTickets(true)
-      try {
-        const r = await fetch(`/api/sessions/${assignedSession.id}/tickets`)
-        const d = (await r.json()) as TicketData
-        if (!cancelled) setTicketData(d)
-      } catch {
-        // non-critical
-      } finally {
-        if (!cancelled) setLoadingTickets(false)
-      }
-    }
-
-    void fetchTickets()
-    const interval = setInterval(fetchTickets, 3000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [showPanel, assignedSession])
-
   const handleScan = useCallback(async (rawData: string) => {
+    if (!scanningRef.current) return
+    // Prevent re-triggering on the same QR while processing
+    if (rawData === lastScannedRef.current) return
+
     scanningRef.current = false
+    lastScannedRef.current = rawData
     setStatus('processing')
     vibrate(50)
 
@@ -203,6 +145,7 @@ export default function ScanPage() {
       setStatus('idle')
       setResult(null)
       scanningRef.current = true
+      lastScannedRef.current = null
     }, cooldown)
   }, [])
 
@@ -217,7 +160,6 @@ export default function ScanPage() {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } },
         })
-
         if (!active || !videoRef.current) return
         videoRef.current.srcObject = stream
         await videoRef.current.play()
@@ -231,10 +173,8 @@ export default function ScanPage() {
 
     function tick() {
       if (!active) return
-
       const video = videoRef.current
       const canvas = canvasRef.current
-
       if (scanningRef.current && video && canvas && video.readyState === 4) {
         canvas.width = video.videoWidth
         canvas.height = video.videoHeight
@@ -243,14 +183,13 @@ export default function ScanPage() {
           ctx.drawImage(video, 0, 0)
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
           const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert',
+            inversionAttempts: 'attemptBoth',
           })
           if (code?.data) {
             void handleScan(code.data)
           }
         }
       }
-
       rafId = requestAnimationFrame(tick)
     }
 
@@ -262,20 +201,6 @@ export default function ScanPage() {
       if (rafId !== null) cancelAnimationFrame(rafId)
     }
   }, [handleScan])
-
-  async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
-
-  const filteredTickets = (ticketData?.tickets ?? []).filter((t) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      t.attendee_name?.toLowerCase().includes(q) ||
-      t.attendee_email?.toLowerCase().includes(q)
-    )
-  })
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
@@ -303,33 +228,17 @@ export default function ScanPage() {
 
       {/* Header */}
       <div className="absolute top-0 inset-x-0 z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
-              <QrCode className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-white drop-shadow">Scanner</span>
+        <div className="flex items-center gap-2 px-4 py-3">
+          <button
+            onClick={() => router.push('/scanner')}
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 text-white" />
+          </button>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
+            <QrCode className="h-4 w-4 text-white" />
           </div>
-          <div className="flex items-center gap-2">
-            {scannedToday !== null && (
-              <div className="[&>div]:bg-white/10 [&>div]:text-white [&_svg]:text-white/70">
-                <RealtimeCounter initialCount={scannedToday} />
-              </div>
-            )}
-            <button
-              onClick={() => setShowPanel(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
-            >
-              <Users className="h-4 w-4" />
-              List
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/20 transition-colors"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
+          <span className="text-sm font-semibold text-white drop-shadow">Scan QR</span>
         </div>
 
         {/* Session name bar */}
@@ -378,143 +287,6 @@ export default function ScanPage() {
         <div className="absolute bottom-0 inset-x-0 p-4 pb-safe z-10">
           <StatusCard status={status} result={result} />
         </div>
-      )}
-
-      {/* Attendee list panel */}
-      {showPanel && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 z-20 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowPanel(false)}
-          />
-
-          {/* Sheet */}
-          <div className="absolute bottom-0 inset-x-0 z-30 flex flex-col rounded-t-2xl bg-white shadow-2xl"
-            style={{ maxHeight: '75vh' }}>
-
-            {/* Sheet header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 shrink-0">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-700" />
-                <div>
-                  <h2 className="font-semibold text-gray-900">Attendee List</h2>
-                  {assignedSession && (
-                    <p className="text-xs text-gray-400">{assignedSession.name}</p>
-                  )}
-                </div>
-                {loadingTickets && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
-              </div>
-              <button
-                onClick={() => setShowPanel(false)}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {!assignedSession ? (
-              <div className="flex flex-1 items-center justify-center py-10 text-sm text-gray-400">
-                No session assigned
-              </div>
-            ) : ticketData ? (
-              <>
-                {/* Stats bar */}
-                <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100 shrink-0">
-                  <div className="px-4 py-3 text-center">
-                    <p className="text-xl font-bold text-gray-900">{ticketData.total}</p>
-                    <p className="text-xs text-gray-500">Total</p>
-                  </div>
-                  <div className="px-4 py-3 text-center">
-                    <p className="text-xl font-bold text-green-600">{ticketData.checked_in}</p>
-                    <p className="text-xs text-gray-500">Checked in</p>
-                  </div>
-                  <div className="px-4 py-3 text-center">
-                    <p className="text-xl font-bold text-gray-400">{ticketData.remaining}</p>
-                    <p className="text-xs text-gray-500">Remaining</p>
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                <div className="h-1.5 bg-gray-100 shrink-0">
-                  <div
-                    className="h-full bg-green-500 transition-all duration-500"
-                    style={{ width: ticketData.total ? `${(ticketData.checked_in / ticketData.total) * 100}%` : '0%' }}
-                  />
-                </div>
-
-                {/* Search */}
-                <div className="px-4 py-2.5 border-b border-gray-100 shrink-0">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search by name or email…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-3 py-2 text-sm focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10"
-                    />
-                  </div>
-                </div>
-
-                {/* Ticket list */}
-                <div className="overflow-y-auto flex-1 divide-y divide-gray-50">
-                  {filteredTickets.length === 0 ? (
-                    <div className="px-5 py-8 text-center text-sm text-gray-400">
-                      {search ? 'No matches found' : 'No tickets yet'}
-                    </div>
-                  ) : (
-                    filteredTickets.map((ticket) => (
-                      <div
-                        key={ticket.id}
-                        className={cn(
-                          'flex items-center gap-3 px-5 py-3',
-                          ticket.is_used ? 'bg-green-50' : 'bg-white'
-                        )}
-                      >
-                        <div className={cn(
-                          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-                          ticket.is_used ? 'bg-green-100' : 'bg-gray-100'
-                        )}>
-                          {ticket.is_used
-                            ? <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            : <div className="h-2.5 w-2.5 rounded-full bg-gray-300" />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            'truncate text-sm font-medium',
-                            ticket.is_used ? 'text-green-900' : 'text-gray-700'
-                          )}>
-                            {ticket.attendee_name ?? 'Unknown attendee'}
-                          </p>
-                          {ticket.attendee_email && (
-                            <p className="truncate text-xs text-gray-400">{ticket.attendee_email}</p>
-                          )}
-                        </div>
-                        {ticket.is_used && ticket.used_at && (
-                          <div className="flex items-center gap-1 shrink-0 text-xs text-green-600">
-                            <Clock className="h-3 w-3" />
-                            {formatDate(ticket.used_at)}
-                          </div>
-                        )}
-                        {!ticket.is_used && (
-                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400">
-                            Waiting
-                          </span>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-1 items-center justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-300" />
-              </div>
-            )}
-          </div>
-        </>
       )}
     </div>
   )

@@ -30,7 +30,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push(data.role === 'owner' ? '/dashboard' : '/scan')
+      router.push(data.role === 'owner' ? '/dashboard' : '/scanner')
       router.refresh()
     } catch {
       toast.error('Something went wrong. Please try again.')

@@ -28,16 +28,19 @@ async function verifyMessage(message: string, signature: string, secret: string)
   return mismatch === 0
 }
 
-export async function buildPayload(token: string): Promise<string> {
-  const v = 1
+// v2 payload embeds attendee name for instant display on scan.
+// v1 payloads (legacy, no name) are still accepted by verifyPayload.
+export async function buildPayload(token: string, name?: string | null): Promise<string> {
+  const v = 2
+  const n = name ?? ''
   if (!SECRET) {
-    return JSON.stringify({ v, t: token })
+    return JSON.stringify({ v, n, t: token })
   }
-  const s = await signMessage(`v=${v}&t=${token}`, SECRET)
-  return JSON.stringify({ v, t: token, s })
+  const s = await signMessage(`v=${v}&n=${n}&t=${token}`, SECRET)
+  return JSON.stringify({ v, n, t: token, s })
 }
 
-export async function verifyPayload(raw: string): Promise<{ t: string } | null> {
+export async function verifyPayload(raw: string): Promise<{ t: string; n: string | null } | null> {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -54,13 +57,17 @@ export async function verifyPayload(raw: string): Promise<{ t: string } | null> 
     return null
   }
 
-  const obj = parsed as { v: number; t: string; s?: string }
+  const obj = parsed as { v: number; t: string; n?: string; s?: string }
 
   if (SECRET) {
     if (!obj.s) return null
-    const valid = await verifyMessage(`v=${obj.v}&t=${obj.t}`, obj.s, SECRET)
+    // Support v1 (legacy, no name) and v2 (with name) signing schemes
+    const message = obj.v === 1
+      ? `v=${obj.v}&t=${obj.t}`
+      : `v=${obj.v}&n=${obj.n ?? ''}&t=${obj.t}`
+    const valid = await verifyMessage(message, obj.s, SECRET)
     if (!valid) return null
   }
 
-  return { t: obj.t }
+  return { t: obj.t, n: obj.n ?? null }
 }
