@@ -597,7 +597,7 @@ clau
       -- Expired
       IF v_ticket.expires_at IS NOT NULL AND v_ticket.expires_at < now() THEN
         INSERT INTO scan_logs(ticket_id, session_id, scanned_by, scan_result)
-        VALUES (v_ticket.id, v_ticket.session_id, p_scanner_id, 'expired');
+        VALUES (v_ticket.id, v_ticket.session_id, p_scanner_id, 'expired'); l
         RETURN jsonb_build_object('valid', false, 'reason', 'expired');
       END IF;
 
