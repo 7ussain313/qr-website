@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = getClientIp(request)
-  const userAgent = request.headers.get('user-agent') ?? null
 
   // Per-user rate limit: 30 scans/min
   if (!checkRateLimit(`validate:user:${user.id}`, 30, 60_000)) {
@@ -81,8 +80,6 @@ export async function POST(request: NextRequest) {
   const { data, error } = await admin.rpc('validate_ticket', {
     p_token: verified.t,
     p_scanner_id: user.id,
-    p_ip_address: ip,
-    p_user_agent: userAgent,
   })
 
   // PostgreSQL FOR UPDATE NOWAIT lock collision (error code 55P03)

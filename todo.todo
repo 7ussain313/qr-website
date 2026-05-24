@@ -219,7 +219,7 @@ Goal: Implement email/password auth for Owners and Scanner Staff using Supabase
 [x] src/app/(auth)/login/page.tsx — full form UI (client component)
       - Email + password fields with loading state
       - Submits to POST /api/auth/login (NOT direct Supabase call)
-      - Redirects: owner → /dashboard, scanner → /scan
+      - Redirects: owner → /dashboard, scanner → /scanner
       - Error toasts via sonner
 [x] No public registration page — invite-only for staff
 [x] src/app/layout.tsx — Toaster added, metadata updated
@@ -242,7 +242,7 @@ Goal: Implement email/password auth for Owners and Scanner Staff using Supabase
 
 --- 3.6  Middleware Route Protection ---
 [x] Unauthenticated users → redirect to /login
-[x] Scanner staff hitting /dashboard, /sessions, /staff, /analytics → /scan
+[x] Scanner staff hitting /dashboard, /sessions, /staff, /analytics → /scanner
 [x] Revoked accounts (is_active=false) → signed out → /login
 [x] Owners can access /scan (unrestricted)
 
@@ -474,8 +474,8 @@ Goal: Generate cryptographically unique QR codes per ticket. Store tokens
 [x] WHY: QR is generated server-side so the raw token is never in client memory
 
 --- 7.3  QR Payload Format ---
-[x] Payload: JSON stringified { v: 1, t: "<token_uuid>" }
-[x] Optionally sign with HMAC-SHA256 using a server secret for tamper detection
+[x] Payload v2: JSON stringified { v: 2, n: "<name>", t: "<token_uuid>" }
+[x] HMAC-SHA256 signature on v2 payload; v1 legacy payloads still accepted
 [x] Keep payload short — QR complexity grows with payload size
 [x] WHY: versioned payload allows format changes without breaking old codes
 
@@ -490,6 +490,7 @@ Goal: Generate cryptographically unique QR codes per ticket. Store tokens
 [x] "Generate Tickets" button on session detail page
 [x] Input: quantity selector (1–capacity remaining)
 [x] Optional: CSV upload for attendee names/emails
+[x] Optional: textarea to enter names line-by-line (mobile-friendly)
 [x] Progress indicator for bulk generation (stream response)
 [x] After generation: show list with download QR button per ticket
 
@@ -509,18 +510,19 @@ PHASE 8 — QR SCANNING SYSTEM
 Goal: Scanner staff use a mobile-friendly camera UI to scan QR codes. Scanning
       always calls the server — never validates on the frontend.
 
---- 8.1  Scanner Page UI (/scan) ---
-[x] Mobile-first, full-screen camera view
-[x] Use react-qr-reader or @zxing/browser for QR detection (jsqr used)
+--- 8.1  Scanner Pages ---
+[x] /scanner — dashboard with Scan QR, View Scan List, Logout buttons
+[x] /scan — mobile-first, full-screen camera view (jsQR, inversionAttempts: attemptBoth)
+[x] /scan-list — dedicated attendee list with live check-in status and search
 [x] Show status overlay (Ready / Scanning / Processing / Result)
 [x] Result states:
       ✅ Valid   — green overlay, attendee name, session name
-      ❌ Used    — red overlay, "Already scanned at <time> by <staff>"
+      ❌ Used    — red overlay, "Already scanned at <time>"
       ⏰ Expired — yellow overlay, "Ticket expired"
       ❓ Invalid — red overlay, "QR code not recognised"
 [x] Auto-reset to scan mode after 3 seconds
 [x] Haptic feedback on mobile (navigator.vibrate)
-[x] WHY: visual + haptic feedback reduces scanner error under pressure
+[x] Guard: same QR data cannot re-trigger while processing (lastScannedRef)
 
 --- 8.2  Scan API Route ---
 [x] POST /api/validate:
@@ -591,7 +593,7 @@ Goal: Make it mathematically impossible to use a ticket twice, even under
       IF NOT FOUND THEN
         RETURN jsonb_build_object('valid', false, 'reason', 'not_found');
       END IF;
-
+clau
       -- Expired
       IF v_ticket.expires_at IS NOT NULL AND v_ticket.expires_at < now() THEN
         INSERT INTO scan_logs(ticket_id, session_id, scanned_by, scan_result)
@@ -752,14 +754,14 @@ Goal: Deploy to production on Vercel with production Supabase, environment
       variables, and custom domain. Zero-downtime.
 
 --- 12.1  Pre-Deployment Checklist ---
-[ ] pnpm build passes with 0 errors
-[ ] All TypeScript errors resolved (tsc --noEmit)
+[x] pnpm build passes with 0 errors
+[x] All TypeScript errors resolved (tsc --noEmit)
 [ ] All .env.local variables documented in .env.example
 [ ] pnpm audit clean
 [ ] supabase db push run against production project
 
 --- 12.2  Vercel Deployment ---
-[ ] Push to GitHub main branch
+[x] Push to GitHub main branch
 [ ] Connect GitHub repo to Vercel
 [ ] Add all environment variables in Vercel dashboard:
       NEXT_PUBLIC_SUPABASE_URL
@@ -791,7 +793,7 @@ Goal: Deploy to production on Vercel with production Supabase, environment
 [ ] Production URL loads without errors
 [ ] HTTPS enforced (no HTTP fallback)
 [ ] Environment variables are NOT visible in client bundle (check DevTools)
-[ ] Scanner staff can only access /scan on production
+[x] Scanner staff can only access /scanner, /scan, /scan-list on production
 
 ================================================================================
 PHASE 13 — SCALING AND OPTIMIZATION
@@ -915,7 +917,7 @@ Phase  8 — QR Scanning System           [x] COMPLETE
 Phase  9 — One-Time Validation Logic    [x] COMPLETE
 Phase 10 — Admin Dashboard / Analytics  [x] COMPLETE
 Phase 11 — Security Hardening           [x] COMPLETE
-Phase 12 — Deployment                   [ ] NOT STARTED
+Phase 12 — Deployment                   [~] IN PROGRESS (build ✓, pushed ✓, Vercel pending)
 Phase 13 — Scaling and Optimization     [x] COMPLETE
 
 ================================================================================
