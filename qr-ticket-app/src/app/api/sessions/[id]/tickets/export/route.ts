@@ -1,7 +1,69 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
+import { buildPayload } from '@/lib/qr/hmac'
+import { ImageResponse } from 'next/og'
+import QRCode from 'qrcode'
 import JSZip from 'jszip'
+import React from 'react'
+import { NOTO_NASKH_ARABIC_B64 } from '@/lib/fonts'
 import type { NextRequest } from 'next/server'
+
+function getFontData(): ArrayBuffer {
+  const buf = Buffer.from(NOTO_NASKH_ARABIC_B64, 'base64')
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+}
+
+async function renderCard(qrDataUrl: string, name: string | null, fontData: ArrayBuffer): Promise<Buffer> {
+  const totalHeight = name ? 330 : 280
+  const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
+
+  const ir = new ImageResponse(
+    React.createElement(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'white',
+          width: '300px',
+          height: `${totalHeight}px`,
+          padding: '16px',
+          gap: '10px',
+        },
+      },
+      name
+        ? React.createElement('div', {
+            style: {
+              fontSize,
+              fontWeight: 'bold',
+              fontFamily: 'NotoNaskhArabic',
+              textAlign: 'center',
+              color: '#111111',
+              maxWidth: '268px',
+              direction: 'rtl',
+            },
+          }, name)
+        : null,
+      React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
+    ),
+    {
+      width: 300,
+      height: totalHeight,
+      fonts: [{ name: 'NotoNaskhArabic', data: fontData, weight: 400, style: 'normal' }],
+    }
+  )
+
+  const reader = ir.body!.getReader()
+  const chunks: Uint8Array[] = []
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (value) chunks.push(value)
+  }
+  return Buffer.concat(chunks.map((c) => Buffer.from(c)))
+}
 
 export async function GET(
   request: NextRequest,
@@ -29,7 +91,7 @@ export async function GET(
 
   const { data: tickets, error } = await admin
     .from('tickets')
-    .select('id, attendee_name')
+    .select('id, token, attendee_name')
     .eq('session_id', id)
     .order('created_at')
 
@@ -41,23 +103,20 @@ export async function GET(
     return new Response('No tickets to export', { status: 404 })
   }
 
-  const origin = request.nextUrl.origin
-  const cookieHeader = request.headers.get('cookie') ?? ''
+  const fontData = getFontData()
   const zip = new JSZip()
   const padLen = String(tickets.length).length
 
-  await Promise.all(
-    tickets.map(async (ticket, i) => {
-      const res = await fetch(`${origin}/api/tickets/${ticket.id}/qr`, {
-        headers: { cookie: cookieHeader },
-      })
-      if (!res.ok) return
-      const pngBuffer = Buffer.from(await res.arrayBuffer())
-      const index = String(i + 1).padStart(padLen, '0')
-      const label = ticket.attendee_name?.replace(/[^a-z0-9]/gi, '-') ?? ticket.id
-      zip.file(`${index}-${label}.png`, pngBuffer)
-    })
-  )
+  for (const [i, ticket] of tickets.entries()) {
+    const payload = await buildPayload(ticket.token, ticket.attendee_name)
+    const qrBuffer = await QRCode.toBuffer(payload, { type: 'png', width: 260, margin: 2 })
+    const qrDataUrl = `data:image/png;base64,${qrBuffer.toString('base64')}`
+
+    const pngBuffer = await renderCard(qrDataUrl, ticket.attendee_name, fontData)
+    const index = String(i + 1).padStart(padLen, '0')
+    const label = ticket.attendee_name?.replace(/[^a-z0-9]/gi, '-') ?? ticket.id
+    zip.file(`${index}-${label}.png`, pngBuffer)
+  }
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
   const sessionSlug = session.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()

@@ -4,19 +4,12 @@ import { buildPayload } from '@/lib/qr/hmac'
 import { ImageResponse } from 'next/og'
 import QRCode from 'qrcode'
 import React from 'react'
-import fs from 'fs'
-import path from 'path'
+import { NOTO_NASKH_ARABIC_B64 } from '@/lib/fonts'
 import type { NextRequest } from 'next/server'
 
-let fontCache: ArrayBuffer | null = null
-
-function getFont(): ArrayBuffer {
-  if (fontCache) return fontCache
-  const buf = fs.readFileSync(
-    path.join(process.cwd(), 'public', 'fonts', 'NotoNaskhArabic-Regular.ttf')
-  )
-  fontCache = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
-  return fontCache
+function getFontData(): ArrayBuffer {
+  const buf = Buffer.from(NOTO_NASKH_ARABIC_B64, 'base64')
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
 }
 
 export async function GET(
@@ -55,8 +48,7 @@ export async function GET(
 
   const payload = await buildPayload(ticket.token, ticket.attendee_name)
   const qrBuffer = await QRCode.toBuffer(payload, { type: 'png', width: 260, margin: 2 })
-  const qrBase64 = Buffer.from(qrBuffer).toString('base64')
-  const qrDataUrl = `data:image/png;base64,${qrBase64}`
+  const qrDataUrl = `data:image/png;base64,${qrBuffer.toString('base64')}`
 
   const name = ticket.attendee_name
   const totalHeight = name ? 330 : 280
@@ -79,35 +71,24 @@ export async function GET(
         },
       },
       name
-        ? React.createElement(
-            'div',
-            {
-              style: {
-                fontSize,
-                fontWeight: 'bold',
-                fontFamily: 'NotoNaskhArabic',
-                textAlign: 'center',
-                color: '#111111',
-                maxWidth: '268px',
-                direction: 'rtl',
-              },
+        ? React.createElement('div', {
+            style: {
+              fontSize,
+              fontWeight: 'bold',
+              fontFamily: 'NotoNaskhArabic',
+              textAlign: 'center',
+              color: '#111111',
+              maxWidth: '268px',
+              direction: 'rtl',
             },
-            name
-          )
+          }, name)
         : null,
       React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
     ),
     {
       width: 300,
       height: totalHeight,
-      fonts: [
-        {
-          name: 'NotoNaskhArabic',
-          data: getFont(),
-          weight: 400,
-          style: 'normal',
-        },
-      ],
+      fonts: [{ name: 'NotoNaskhArabic', data: getFontData(), weight: 400, style: 'normal' }],
     }
   )
 
