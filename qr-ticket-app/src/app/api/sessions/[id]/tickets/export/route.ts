@@ -5,11 +5,11 @@ import { ImageResponse } from 'next/og'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
 import React from 'react'
-import { NOTO_NASKH_ARABIC_B64 } from '@/lib/fonts'
+import { NOTO_ARABIC_B64 } from '@/lib/fonts'
 import type { NextRequest } from 'next/server'
 
 function getFontData(): ArrayBuffer {
-  const buf = Buffer.from(NOTO_NASKH_ARABIC_B64, 'base64')
+  const buf = Buffer.from(NOTO_ARABIC_B64, 'base64')
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
 }
 
@@ -38,7 +38,7 @@ async function renderCard(qrDataUrl: string, name: string | null, fontData: Arra
             style: {
               fontSize,
               fontWeight: 'bold',
-              fontFamily: 'NotoNaskhArabic',
+              fontFamily: 'NotoSansArabic',
               textAlign: 'center',
               color: '#111111',
               maxWidth: '268px',
@@ -51,7 +51,7 @@ async function renderCard(qrDataUrl: string, name: string | null, fontData: Arra
     {
       width: 300,
       height: totalHeight,
-      fonts: [{ name: 'NotoNaskhArabic', data: fontData, weight: 400, style: 'normal' }],
+      fonts: [{ name: 'NotoSansArabic', data: fontData, weight: 400, style: 'normal' }],
     }
   )
 
