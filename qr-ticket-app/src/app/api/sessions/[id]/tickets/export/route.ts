@@ -41,6 +41,7 @@ async function renderCard(qrDataUrl: string, name: string | null, fontData: Arra
               style: {
                 display: 'flex',
                 flexDirection: 'row',
+                direction: 'ltr',
                 justifyContent: 'center',
                 alignItems: 'center',
                 flexWrap: 'wrap',

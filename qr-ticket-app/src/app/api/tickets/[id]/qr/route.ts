@@ -78,6 +78,7 @@ export async function GET(
               style: {
                 display: 'flex',
                 flexDirection: 'row',
+                direction: 'ltr',
                 justifyContent: 'center',
                 alignItems: 'center',
                 flexWrap: 'wrap',
