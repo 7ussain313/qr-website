@@ -28,6 +28,10 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    '/api/tickets/[id]/qr': ['./public/fonts/**'],
+    '/api/sessions/[id]/tickets/export': ['./public/fonts/**'],
+  },
   async headers() {
     return [
       {
