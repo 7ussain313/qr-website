@@ -69,6 +69,18 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    return await handleExport(request, params)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err)
+    return new Response(msg, { status: 500, headers: { 'Content-Type': 'text/plain' } })
+  }
+}
+
+async function handleExport(
+  request: NextRequest,
+  params: Promise<{ id: string }>
+) {
   const { id } = await params
   const { user, profile } = await getServerSession(request)
 
