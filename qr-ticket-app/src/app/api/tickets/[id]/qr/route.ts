@@ -5,7 +5,6 @@ import { ImageResponse } from 'next/og'
 import QRCode from 'qrcode'
 import React from 'react'
 import { NOTO_ARABIC_B64 } from '@/lib/fonts'
-import { shapeArabic } from '@/lib/arabic-shaper'
 import type { NextRequest } from 'next/server'
 
 function getFontData(): ArrayBuffer {
@@ -52,7 +51,6 @@ export async function GET(
   const qrDataUrl = `data:image/png;base64,${qrBuffer.toString('base64')}`
 
   const name = ticket.attendee_name
-  const displayName = name ? shapeArabic(name) : null
   const totalHeight = name ? 330 : 280
   const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
 
@@ -72,7 +70,7 @@ export async function GET(
           gap: '10px',
         },
       },
-      displayName
+      name
         ? React.createElement('div', {
             style: {
               fontSize,
@@ -81,9 +79,9 @@ export async function GET(
               textAlign: 'center',
               color: '#111111',
               maxWidth: '268px',
-              direction: 'rtl',
+              direction: 'ltr',
             },
-          }, displayName)
+          }, name)
         : null,
       React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
     ),
