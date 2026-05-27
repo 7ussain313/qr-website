@@ -5,7 +5,6 @@ import { ImageResponse } from 'next/og'
 import QRCode from 'qrcode'
 import React from 'react'
 import { NOTO_ARABIC_B64 } from '@/lib/fonts'
-import { shapeArabic } from '@/lib/arabic-shaper'
 import type { NextRequest } from 'next/server'
 
 function getFontData(): ArrayBuffer {
@@ -51,7 +50,7 @@ export async function GET(
   const qrBuffer = await QRCode.toBuffer(payload, { type: 'png', width: 260, margin: 2 })
   const qrDataUrl = `data:image/png;base64,${qrBuffer.toString('base64')}`
 
-  const name = ticket.attendee_name ? shapeArabic(ticket.attendee_name) : ticket.attendee_name
+  const name = ticket.attendee_name
   const totalHeight = name ? 330 : 280
   const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
 

@@ -6,7 +6,6 @@ import QRCode from 'qrcode'
 import JSZip from 'jszip'
 import React from 'react'
 import { NOTO_ARABIC_B64 } from '@/lib/fonts'
-import { shapeArabic } from '@/lib/arabic-shaper'
 import type { NextRequest } from 'next/server'
 
 function getFontData(): ArrayBuffer {
@@ -125,7 +124,7 @@ async function handleExport(
     const qrBuffer = await QRCode.toBuffer(payload, { type: 'png', width: 260, margin: 2 })
     const qrDataUrl = `data:image/png;base64,${qrBuffer.toString('base64')}`
 
-    const pngBuffer = await renderCard(qrDataUrl, ticket.attendee_name ? shapeArabic(ticket.attendee_name) : ticket.attendee_name, fontData)
+    const pngBuffer = await renderCard(qrDataUrl, ticket.attendee_name, fontData)
     const index = String(i + 1).padStart(padLen, '0')
     const label = ticket.attendee_name?.replace(/[^a-z0-9]/gi, '-') ?? ticket.id
     zip.file(`${index}-${label}.png`, pngBuffer)
