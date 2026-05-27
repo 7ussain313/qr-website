@@ -14,7 +14,7 @@ function getFontData(): ArrayBuffer {
 }
 
 async function renderCard(qrDataUrl: string, name: string | null, fontData: ArrayBuffer): Promise<Buffer> {
-  const displayName = name ? name.split(' ').reverse().join(' ') : null
+  const words = name ? name.trim().split(/\s+/) : []
   const totalHeight = name ? 330 : 280
   const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
 
@@ -34,18 +34,37 @@ async function renderCard(qrDataUrl: string, name: string | null, fontData: Arra
           gap: '10px',
         },
       },
-      displayName
-        ? React.createElement('div', {
-            style: {
-              fontSize,
-              fontWeight: 'bold',
-              fontFamily: 'NotoSansArabic',
-              textAlign: 'center',
-              color: '#111111',
-              maxWidth: '268px',
-              direction: 'rtl',
+      words.length > 0
+        ? React.createElement(
+            'div',
+            {
+              style: {
+                display: 'flex',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '5px',
+                maxWidth: '268px',
+              },
             },
-          }, displayName)
+            ...words.map((word, i) =>
+              React.createElement(
+                'span',
+                {
+                  key: i,
+                  style: {
+                    fontSize,
+                    fontWeight: 'bold',
+                    fontFamily: 'NotoSansArabic',
+                    color: '#111111',
+                    direction: 'rtl',
+                  },
+                },
+                word,
+              ),
+            ),
+          )
         : null,
       React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
     ),
