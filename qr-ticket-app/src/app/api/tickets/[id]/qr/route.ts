@@ -4,7 +4,20 @@ import { buildPayload } from '@/lib/qr/hmac'
 import { ImageResponse } from 'next/og'
 import QRCode from 'qrcode'
 import React from 'react'
+import fs from 'fs'
+import path from 'path'
 import type { NextRequest } from 'next/server'
+
+let fontCache: ArrayBuffer | null = null
+
+function getFont(): ArrayBuffer {
+  if (fontCache) return fontCache
+  const buf = fs.readFileSync(
+    path.join(process.cwd(), 'public', 'fonts', 'NotoNaskhArabic-Regular.ttf')
+  )
+  fontCache = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  return fontCache
+}
 
 export async function GET(
   request: NextRequest,
@@ -72,9 +85,11 @@ export async function GET(
               style: {
                 fontSize,
                 fontWeight: 'bold',
+                fontFamily: 'NotoNaskhArabic',
                 textAlign: 'center',
                 color: '#111111',
                 maxWidth: '268px',
+                direction: 'rtl',
               },
             },
             name
@@ -82,7 +97,18 @@ export async function GET(
         : null,
       React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
     ),
-    { width: 300, height: totalHeight }
+    {
+      width: 300,
+      height: totalHeight,
+      fonts: [
+        {
+          name: 'NotoNaskhArabic',
+          data: getFont(),
+          weight: 400,
+          style: 'normal',
+        },
+      ],
+    }
   )
 
   const buffer = await imageResponse.arrayBuffer()

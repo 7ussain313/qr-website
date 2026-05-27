@@ -1,37 +1,23 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerSession } from '@/lib/auth/getServerSession'
 import { buildPayload } from '@/lib/qr/hmac'
+import { ImageResponse } from 'next/og'
 import QRCode from 'qrcode'
 import JSZip from 'jszip'
+import React from 'react'
+import fs from 'fs'
+import path from 'path'
 import type { NextRequest } from 'next/server'
 
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
+let fontCache: ArrayBuffer | null = null
 
-function buildSvgCard(qrBase64: string, name: string | null): Buffer {
-  const hasName = !!name
-  const totalHeight = hasName ? 330 : 280
-  const fontSize = !hasName ? 0 : name!.length > 22 ? 13 : name!.length > 14 ? 16 : 20
-  const qrY = hasName ? 50 : 10
-
-  const nameEl = hasName
-    ? `<text x="150" y="32" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="${fontSize}" font-weight="bold" fill="#111111">${escapeXml(name!)}</text>`
-    : ''
-
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="${totalHeight}">
-  <rect width="300" height="${totalHeight}" fill="white"/>
-  ${nameEl}
-  <image href="data:image/png;base64,${qrBase64}" x="20" y="${qrY}" width="260" height="260"/>
-</svg>`
-
-  return Buffer.from(svg, 'utf8')
+function getFont(): ArrayBuffer {
+  if (fontCache) return fontCache
+  const buf = fs.readFileSync(
+    path.join(process.cwd(), 'public', 'fonts', 'NotoNaskhArabic-Regular.ttf')
+  )
+  fontCache = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  return fontCache
 }
 
 export async function GET(
@@ -72,22 +58,73 @@ export async function GET(
     return new Response('No tickets to export', { status: 404 })
   }
 
+  const fontData = getFont()
   const zip = new JSZip()
 
-  await Promise.all(
-    tickets.map(async (ticket, i) => {
-      const payload = await buildPayload(ticket.token, ticket.attendee_name)
-      const qrBuffer = await QRCode.toBuffer(payload, { type: 'png', width: 260, margin: 2 })
-      const qrBase64 = Buffer.from(qrBuffer).toString('base64')
+  for (const [i, ticket] of tickets.entries()) {
+    const payload = await buildPayload(ticket.token, ticket.attendee_name)
+    const qrBuffer = await QRCode.toBuffer(payload, { type: 'png', width: 260, margin: 2 })
+    const qrBase64 = Buffer.from(qrBuffer).toString('base64')
+    const qrDataUrl = `data:image/png;base64,${qrBase64}`
 
-      const svgBuffer = buildSvgCard(qrBase64, ticket.attendee_name)
-      const index = String(i + 1).padStart(String(tickets.length).length, '0')
-      const label = ticket.attendee_name
-        ? ticket.attendee_name.replace(/[^a-z0-9]/gi, '-')
-        : ticket.id
-      zip.file(`${index}-${label}.svg`, svgBuffer)
-    })
-  )
+    const name = ticket.attendee_name
+    const totalHeight = name ? 330 : 280
+    const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
+
+    const imageResponse = new ImageResponse(
+      React.createElement(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'white',
+            width: '300px',
+            height: `${totalHeight}px`,
+            padding: '16px',
+            gap: '10px',
+          },
+        },
+        name
+          ? React.createElement(
+              'div',
+              {
+                style: {
+                  fontSize,
+                  fontWeight: 'bold',
+                  fontFamily: 'NotoNaskhArabic',
+                  textAlign: 'center',
+                  color: '#111111',
+                  maxWidth: '268px',
+                  direction: 'rtl',
+                },
+              },
+              name
+            )
+          : null,
+        React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
+      ),
+      {
+        width: 300,
+        height: totalHeight,
+        fonts: [
+          {
+            name: 'NotoNaskhArabic',
+            data: fontData,
+            weight: 400,
+            style: 'normal',
+          },
+        ],
+      }
+    )
+
+    const buffer = Buffer.from(await imageResponse.arrayBuffer())
+    const index = String(i + 1).padStart(String(tickets.length).length, '0')
+    const label = name ? name.replace(/[^a-z0-9]/gi, '-') : ticket.id
+    zip.file(`${index}-${label}.png`, buffer)
+  }
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' })
   const sessionSlug = session.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()
