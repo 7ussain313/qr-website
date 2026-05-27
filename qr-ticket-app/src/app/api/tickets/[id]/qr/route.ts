@@ -51,6 +51,9 @@ export async function GET(
   const qrDataUrl = `data:image/png;base64,${qrBuffer.toString('base64')}`
 
   const name = ticket.attendee_name
+  // Reverse word order before RTL rendering: satori's RTL pass re-reverses it back
+  // to logical reading order, so "فاطمة عبدالله" appears left-to-right as expected.
+  const displayName = name ? name.split(' ').reverse().join(' ') : null
   const totalHeight = name ? 330 : 280
   const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
 
@@ -70,7 +73,7 @@ export async function GET(
           gap: '10px',
         },
       },
-      name
+      displayName
         ? React.createElement('div', {
             style: {
               fontSize,
@@ -79,9 +82,9 @@ export async function GET(
               textAlign: 'center',
               color: '#111111',
               maxWidth: '268px',
-              direction: 'ltr',
+              direction: 'rtl',
             },
-          }, name)
+          }, displayName)
         : null,
       React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
     ),

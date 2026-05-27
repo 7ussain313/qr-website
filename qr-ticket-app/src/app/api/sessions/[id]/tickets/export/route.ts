@@ -14,6 +14,7 @@ function getFontData(): ArrayBuffer {
 }
 
 async function renderCard(qrDataUrl: string, name: string | null, fontData: ArrayBuffer): Promise<Buffer> {
+  const displayName = name ? name.split(' ').reverse().join(' ') : null
   const totalHeight = name ? 330 : 280
   const fontSize = !name ? 0 : name.length > 22 ? 13 : name.length > 14 ? 16 : 20
 
@@ -33,7 +34,7 @@ async function renderCard(qrDataUrl: string, name: string | null, fontData: Arra
           gap: '10px',
         },
       },
-      name
+      displayName
         ? React.createElement('div', {
             style: {
               fontSize,
@@ -42,9 +43,9 @@ async function renderCard(qrDataUrl: string, name: string | null, fontData: Arra
               textAlign: 'center',
               color: '#111111',
               maxWidth: '268px',
-              direction: 'ltr',
+              direction: 'rtl',
             },
-          }, name)
+          }, displayName)
         : null,
       React.createElement('img', { src: qrDataUrl, width: 260, height: 260 })
     ),
